@@ -899,6 +899,12 @@ def simulate_from_prepared(prepared: dict, cash: float,
         for idx, cand in enumerate(buy_candidates):
             replacement_from = None
             replacement_score_delta = None
+            # 2026-07-05：指向本次迭代（若有）append进replacement_attempts的
+            # 那条记录，供下面4处_undo_replacement调用点在回滚时同步标记
+            # decision="ROLLED_BACK"——跟"KEEP"（margin本身不够）严格区分开，
+            # 避免把"margin通过但因敞口/板块/qty<=0被回滚"误记成"margin
+            # 阻止"，污染 Replacement Blocked / Blocked Ratio 统计口径。
+            attempt_record = None
 
             if _active_count() >= MAX_POSITIONS:
                 # ── v2.3 Portfolio Capacity Manager：Active Replacement ──
@@ -987,7 +993,7 @@ def simulate_from_prepared(prepared: dict, cash: float,
                             held_positions=held, current_day_idx=day_idx,
                             full_score_history=full_score_history)
                         if evaluation.decision != "NO_CANDIDATE":
-                            replacement_attempts.append({
+                            attempt_record = {
                                 "date": today, "day_idx": day_idx,
                                 "incoming_code": evaluation.incoming_code,
                                 "victim_code": evaluation.victim_code,
@@ -998,7 +1004,8 @@ def simulate_from_prepared(prepared: dict, cash: float,
                                 "margin": evaluation.margin,
                                 "margin_satisfied": evaluation.margin_satisfied,
                                 "decision": evaluation.decision,
-                            })
+                            }
+                            replacement_attempts.append(attempt_record)
                         if evaluation.decision == "REPLACE":
                             victim_code = evaluation.victim_code
                             replacement_type = evaluation.replacement_type
@@ -1075,6 +1082,8 @@ def simulate_from_prepared(prepared: dict, cash: float,
                     portfolio_cash -= cash_undo
                     realized_pnl -= pnl_undo
                     replacement_from = None
+                    if attempt_record is not None:
+                        attempt_record["decision"] = "ROLLED_BACK"
                 capacity_blocks.append({
                     "date": today, "reason": "MAX_TOTAL_EXPOSURE",
                     "blocked_candidates": [
@@ -1104,6 +1113,8 @@ def simulate_from_prepared(prepared: dict, cash: float,
                     portfolio_cash -= cash_undo
                     realized_pnl -= pnl_undo
                     replacement_from = None
+                    if attempt_record is not None:
+                        attempt_record["decision"] = "ROLLED_BACK"
                 continue
 
             avail = portfolio_cash
@@ -1125,6 +1136,8 @@ def simulate_from_prepared(prepared: dict, cash: float,
                     portfolio_cash -= cash_undo
                     realized_pnl -= pnl_undo
                     replacement_from = None
+                    if attempt_record is not None:
+                        attempt_record["decision"] = "ROLLED_BACK"
                 continue
             cost = price * qty
             fee  = cost * COMMISSION
@@ -1137,6 +1150,8 @@ def simulate_from_prepared(prepared: dict, cash: float,
                         portfolio_cash -= cash_undo
                         realized_pnl -= pnl_undo
                         replacement_from = None
+                        if attempt_record is not None:
+                            attempt_record["decision"] = "ROLLED_BACK"
                     continue
                 cost = price * qty
                 fee  = cost * COMMISSION

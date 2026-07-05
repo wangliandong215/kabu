@@ -1,0 +1,5 @@
+﻿date,victim_code,incoming_code,victim_ret_5d_pct,candidate_ret_5d_pct,victim_ret_10d_pct,candidate_ret_10d_pct,victim_ret_20d_pct,candidate_ret_20d_pct,victim_ret_60d_pct,candidate_ret_60d_pct
+2016-03-03,US.EXC,US.VRSK,5.113,-0.538,5.671,1.366,7.995,5.305,4.844,4.084
+2017-06-21,US.FTNT,US.AMD,0.0,-5.365,0.663,-6.867,7.898,-1.288,2.465,-10.443
+2019-01-18,US.DXCM,US.VRSK,-5.457,0.458,-3.364,3.155,-1.083,7.545,-21.241,18.242
+2019-10-21,US.ALGN,US.VRTX,19.225,5.716,23.2,8.658,27.838,14.423,35.703,28.317
