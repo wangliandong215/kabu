@@ -993,6 +993,9 @@ def simulate_from_prepared(prepared: dict, cash: float,
                             held_positions=held, current_day_idx=day_idx,
                             full_score_history=full_score_history)
                         if evaluation.decision != "NO_CANDIDATE":
+                            victim_pos_snapshot = held.get(evaluation.victim_code, {})
+                            n_obs_pool = sum(1 for p in held.values()
+                                              if p.get("score_label") == scoring.LABEL_OBSERVATION)
                             attempt_record = {
                                 "date": today, "day_idx": day_idx,
                                 "incoming_code": evaluation.incoming_code,
@@ -1004,6 +1007,18 @@ def simulate_from_prepared(prepared: dict, cash: float,
                                 "margin": evaluation.margin,
                                 "margin_satisfied": evaluation.margin_satisfied,
                                 "decision": evaluation.decision,
+                                # 2026-07-05 v2.4优化阶段二（Replace决策特征分析）新增，
+                                # 纯观测字段，不参与任何交易判断——供
+                                # analytics/replace_decision_feature_analysis.py 提取候选
+                                # 特征用，不是新增策略信号。
+                                "victim_strategy": victim_pos_snapshot.get("strategy"),
+                                "victim_holding_days": day_idx - victim_pos_snapshot.get(
+                                    "entry_day_idx", day_idx),
+                                "victim_entry_atr": victim_pos_snapshot.get("entry_atr"),
+                                "victim_avg_cost": victim_pos_snapshot.get("avg_cost"),
+                                "incoming_strategy": cand.get("strategy"),
+                                "n_observation_pool_size": n_obs_pool,
+                                "weather_code": weather_code,
                             }
                             replacement_attempts.append(attempt_record)
                         if evaluation.decision == "REPLACE":
