@@ -1,0 +1,8 @@
+﻿config,两窗口均稳定改善,full_2015_2026_收益达标,full_2015_2026_Sharpe达标,full_2015_2026_回撤达标,full_2015_2026_AlphaC达标,full_2015_2026_本窗口通过,recent_2019_2026_收益达标,recent_2019_2026_Sharpe达标,recent_2019_2026_回撤达标,recent_2019_2026_AlphaC达标,recent_2019_2026_本窗口通过
+pool_size,False,False,False,False,False,False,True,True,True,False,False
+new_score,True,True,True,True,True,True,True,True,True,True,True
+same_sector,False,False,False,False,True,False,True,True,True,True,True
+pool+score,False,False,False,False,True,False,True,True,True,True,True
+pool+sector,False,False,False,False,False,False,True,True,True,False,False
+score+sector,True,True,True,True,True,True,True,True,True,True,True
+pool+score+sector,False,False,False,False,True,False,True,True,True,True,True

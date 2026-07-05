@@ -236,5 +236,85 @@ class TestEvaluateReplacement(unittest.TestCase):
         self.assertEqual(ev.decision, "NO_CANDIDATE")
 
 
+class TestEvaluateReplacementAblationGates(unittest.TestCase):
+    """v2.4优化阶段三消融实验：三个可选前置过滤门，默认关闭
+    （config.py里None/False），这里验证开启后的行为。"""
+
+    def setUp(self):
+        self._orig_margin = config.REPLACEMENT_MARGIN
+        self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
+        self._orig_max_pool = config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE
+        self._orig_block_sector = config.REPLACEMENT_BLOCK_SAME_SECTOR
+        self._orig_sector_map = dict(config.SECTOR_MAP)
+        config.REPLACEMENT_MARGIN = 10.0
+        config.REPLACEMENT_MIN_NEW_SCORE = None
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = False
+
+    def tearDown(self):
+        config.REPLACEMENT_MARGIN = self._orig_margin
+        config.REPLACEMENT_MIN_NEW_SCORE = self._orig_min_score
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = self._orig_max_pool
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
+        config.SECTOR_MAP.clear()
+        config.SECTOR_MAP.update(self._orig_sector_map)
+
+    def test_min_new_score_disabled_by_default_has_no_effect(self):
+        held = {"US.OBS": {"score_label": LABEL_OBSERVATION, "total_score": 45.0, "entry_day_idx": 0}}
+        ev = evaluate_replacement("US.NEW", 60.0, held, 10)
+        self.assertEqual(ev.decision, "REPLACE")
+
+    def test_min_new_score_blocks_weak_incoming_signal(self):
+        config.REPLACEMENT_MIN_NEW_SCORE = 95.0
+        held = {"US.OBS": {"score_label": LABEL_OBSERVATION, "total_score": 45.0, "entry_day_idx": 0}}
+        ev = evaluate_replacement("US.NEW", 90.0, held, 10)   # 90 < 95 threshold
+        self.assertEqual(ev.decision, "NO_CANDIDATE")
+
+    def test_min_new_score_allows_strong_incoming_signal(self):
+        config.REPLACEMENT_MIN_NEW_SCORE = 95.0
+        held = {"US.OBS": {"score_label": LABEL_OBSERVATION, "total_score": 45.0, "entry_day_idx": 0}}
+        ev = evaluate_replacement("US.NEW", 96.0, held, 10)
+        self.assertEqual(ev.decision, "REPLACE")
+
+    def test_max_observation_pool_size_blocks_when_pool_too_large(self):
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = 2
+        held = {
+            "US.A": {"score_label": LABEL_OBSERVATION, "total_score": 40.0, "entry_day_idx": 0},
+            "US.B": {"score_label": LABEL_OBSERVATION, "total_score": 42.0, "entry_day_idx": 0},
+            "US.C": {"score_label": LABEL_OBSERVATION, "total_score": 44.0, "entry_day_idx": 0},
+        }
+        ev = evaluate_replacement("US.NEW", 90.0, held, 10)   # pool size 3 > 2
+        self.assertEqual(ev.decision, "NO_CANDIDATE")
+
+    def test_max_observation_pool_size_allows_when_pool_small_enough(self):
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = 2
+        held = {
+            "US.A": {"score_label": LABEL_OBSERVATION, "total_score": 40.0, "entry_day_idx": 0},
+            "US.B": {"score_label": LABEL_OBSERVATION, "total_score": 42.0, "entry_day_idx": 0},
+        }
+        ev = evaluate_replacement("US.NEW", 90.0, held, 10)   # pool size 2 <= 2
+        self.assertEqual(ev.decision, "REPLACE")
+
+    def test_block_same_sector_skips_same_sector_victim_but_tries_another(self):
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = True
+        config.SECTOR_MAP["US.NEW"] = "tech"
+        config.SECTOR_MAP["US.SAMESECTOR"] = "tech"
+        config.SECTOR_MAP["US.OTHERSECTOR"] = "energy"
+        held = {
+            "US.SAMESECTOR":  {"score_label": LABEL_OBSERVATION, "total_score": 20.0, "entry_day_idx": 0},
+            "US.OTHERSECTOR": {"score_label": LABEL_OBSERVATION, "total_score": 40.0, "entry_day_idx": 0},
+        }
+        ev = evaluate_replacement("US.NEW", 90.0, held, 10)
+        self.assertEqual(ev.victim_code, "US.OTHERSECTOR")   # 同板块的US.SAMESECTOR被跳过
+
+    def test_block_same_sector_no_candidate_when_only_same_sector_available(self):
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = True
+        config.SECTOR_MAP["US.NEW"] = "tech"
+        config.SECTOR_MAP["US.SAMESECTOR"] = "tech"
+        held = {"US.SAMESECTOR": {"score_label": LABEL_OBSERVATION, "total_score": 20.0, "entry_day_idx": 0}}
+        ev = evaluate_replacement("US.NEW", 90.0, held, 10)
+        self.assertEqual(ev.decision, "NO_CANDIDATE")
+
+
 if __name__ == "__main__":
     unittest.main()

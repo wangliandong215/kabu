@@ -149,6 +149,8 @@ def evaluate_replacement(incoming_code: str,
     "NO_CANDIDATE"表示两个通道都没有可换的持仓）。
     """
     margin = config.REPLACEMENT_MARGIN
+    no_candidate = ReplacementEvaluation(incoming_code=incoming_code, incoming_score=incoming_score,
+                                          margin=margin, decision="NO_CANDIDATE")
 
     def _record(victim_code, victim_score, replacement_type) -> ReplacementEvaluation:
         diff = incoming_score - victim_score
@@ -161,8 +163,26 @@ def evaluate_replacement(incoming_code: str,
             margin_satisfied=satisfied,
             decision="REPLACE" if satisfied else "KEEP")
 
+    # v2.4优化阶段三消融实验（2026-07-05）：三个候选变量的可选前置过滤，
+    # 全部默认关闭（config.py里None/False），开启前不影响任何现有行为。
+    # 见 config.py "v2.4优化阶段三" 注释块 + analytics/replace_ablation_
+    # report.py 的验证结论。
+    if (config.REPLACEMENT_MIN_NEW_SCORE is not None
+            and incoming_score < config.REPLACEMENT_MIN_NEW_SCORE):
+        return no_candidate
+
     obs_pool = {code: pos for code, pos in held_positions.items()
                 if pos.get("score_label") == LABEL_OBSERVATION}
+
+    if (config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE is not None
+            and len(obs_pool) > config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE):
+        return no_candidate
+
+    if config.REPLACEMENT_BLOCK_SAME_SECTOR:
+        incoming_sector = config.SECTOR_MAP.get(incoming_code, "other")
+        obs_pool = {code: pos for code, pos in obs_pool.items()
+                    if config.SECTOR_MAP.get(code, "other") != incoming_sector}
+
     obs_candidates = _rank_candidates(obs_pool, current_day_idx)
     if obs_candidates:
         victim_code, victim_score, _ = obs_candidates[0]
@@ -179,5 +199,4 @@ def evaluate_replacement(incoming_code: str,
                 victim_code, victim_score, _ = wf_candidates[0]
                 return _record(victim_code, victim_score, REPL_WEAK_FULL_EVICT)
 
-    return ReplacementEvaluation(incoming_code=incoming_code, incoming_score=incoming_score,
-                                  margin=margin, decision="NO_CANDIDATE")
+    return no_candidate
