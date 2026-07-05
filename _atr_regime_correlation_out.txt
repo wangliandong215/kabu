@@ -1,0 +1,1016 @@
+[10:44:23] [INFO ] news: sentiment engine = FinBERT (ProsusAI/finbert)
+
+[W1] 2015-01-01 ~ 2019-01-01  fetching...
+拉取历史数据...
+  US.AAPL       1006 bars
+  US.MSFT       1006 bars
+  US.NVDA       1006 bars
+  US.AVGO       1006 bars
+  US.AMD        1006 bars
+  US.AMAT       1006 bars
+  US.ADI        1006 bars
+  US.MU         1006 bars
+  US.LRCX       1006 bars
+  US.KLAC       1006 bars
+  US.SNPS       1006 bars
+  US.CDNS       1006 bars
+  US.NXPI       1006 bars
+  US.MRVL       1006 bars
+  US.ON         1006 bars
+  US.ASML       1006 bars
+  US.QCOM       1006 bars
+  US.TXN        1006 bars
+  US.CSCO       1006 bars
+  US.ADBE       1006 bars
+  US.INTU       1006 bars
+  US.PANW       1006 bars
+  US.CRWD       0 bars
+  US.FTNT       1006 bars
+  US.ZS         200 bars
+  US.TEAM       769 bars
+  US.WDAY       1006 bars
+  US.DDOG       0 bars
+  US.SNOW       0 bars
+  US.OKTA       436 bars
+  US.VRSK       1006 bars
+  US.ADP        1006 bars
+  US.PAYX       1006 bars
+  US.AMZN       1006 bars
+  US.META       1006 bars
+  US.GOOGL      1006 bars
+  US.GOOG       1006 bars
+  US.NFLX       1006 bars
+  US.TSLA       1006 bars
+  US.BKNG       1006 bars
+  US.MELI       1006 bars
+  US.ABNB       0 bars
+  US.TTWO       1006 bars
+  US.EA         1006 bars
+  US.TTD        573 bars
+  US.PDD        109 bars
+  US.PLTR       0 bars
+  US.APP        0 bars
+  US.ARM        0 bars
+  US.AMGN       1006 bars
+  US.GILD       1006 bars
+  US.VRTX       1005 bars
+  US.REGN       1005 bars
+  US.ISRG       1006 bars
+  US.IDXX       1006 bars
+  US.DXCM       1005 bars
+  US.ALGN       1006 bars
+  US.GEHC       0 bars
+  US.COST       1006 bars
+  US.SBUX       1006 bars
+  US.MDLZ       1006 bars
+  US.PEP        1006 bars
+  US.MNST       1006 bars
+  US.ORLY       1006 bars
+  US.ROST       1006 bars
+  US.KDP        121 bars
+  US.TMUS       1006 bars
+  US.CMCSA      1006 bars
+  US.HON        1006 bars
+  US.PCAR       1006 bars
+  US.FAST       1006 bars
+  US.CPRT       1006 bars
+  US.CTAS       1006 bars
+  US.BKR        376 bars
+  US.FANG       1006 bars
+  US.LIN        41 bars
+  US.CEG        0 bars
+  US.EXC        1006 bars
+  US.AEP        1006 bars
+  US.XEL        1006 bars
+  US.QQQ        1227 bars
+  US.SPY        1006 bars
+2026-07-04 10:45:08,045 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987228100471913(1) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6784AA510>
+  JP.8035       SKIP (fetch_kline(JP.8035): 无权限获取JP.8035的行情，请检查股票行情权限)
+2026-07-04 10:45:08,550 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(1) reason=CallClose
+2026-07-04 10:45:08,563 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987230235524106(2) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1BD0>
+  JP.285A       SKIP (fetch_kline(JP.285A): 无权限获取JP.285A的行情，请检查股票行情权限)
+2026-07-04 10:45:09,073 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(2) reason=CallClose
+2026-07-04 10:45:09,076 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987232434158423(3) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3390>
+  JP.6146       SKIP (fetch_kline(JP.6146): 无权限获取JP.6146的行情，请检查股票行情权限)
+2026-07-04 10:45:09,592 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(3) reason=CallClose
+2026-07-04 10:45:09,600 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987234620277715(4) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B4A50>
+  JP.6920       SKIP (fetch_kline(JP.6920): 无权限获取JP.6920的行情，请检查股票行情权限)
+2026-07-04 10:45:10,117 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(4) reason=CallClose
+2026-07-04 10:45:10,123 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987236814832004(5) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B4B90>
+  JP.6857       SKIP (fetch_kline(JP.6857): 无权限获取JP.6857的行情，请检查股票行情权限)
+2026-07-04 10:45:10,642 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(5) reason=CallClose
+2026-07-04 10:45:10,646 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987239012173335(6) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B4CD0>
+  JP.4063       SKIP (fetch_kline(JP.4063): 无权限获取JP.4063的行情，请检查股票行情权限)
+2026-07-04 10:45:11,149 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(6) reason=CallClose
+2026-07-04 10:45:11,156 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987241143923409(7) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B4E10>
+  JP.3436       SKIP (fetch_kline(JP.3436): 无权限获取JP.3436的行情，请检查股票行情权限)
+2026-07-04 10:45:11,675 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(7) reason=CallClose
+2026-07-04 10:45:11,694 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987243407054810(8) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B4F50>
+  JP.6723       SKIP (fetch_kline(JP.6723): 无权限获取JP.6723的行情，请检查股票行情权限)
+2026-07-04 10:45:12,200 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(8) reason=CallClose
+2026-07-04 10:45:12,209 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987245565363369(9) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B5090>
+  JP.6963       SKIP (fetch_kline(JP.6963): 无权限获取JP.6963的行情，请检查股票行情权限)
+2026-07-04 10:45:12,726 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(9) reason=CallClose
+2026-07-04 10:45:12,734 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987247764960916(10) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B51D0>
+  JP.4062       SKIP (fetch_kline(JP.4062): 无权限获取JP.4062的行情，请检查股票行情权限)
+2026-07-04 10:45:13,241 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(10) reason=CallClose
+2026-07-04 10:45:13,252 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987249930279759(11) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6795B5310>
+  JP.5214       SKIP (fetch_kline(JP.5214): 无权限获取JP.5214的行情，请检查股票行情权限)
+2026-07-04 10:45:13,758 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(11) reason=CallClose
+2026-07-04 10:45:13,761 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987252080315966(12) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3390>
+  JP.6981       SKIP (fetch_kline(JP.6981): 无权限获取JP.6981的行情，请检查股票行情权限)
+2026-07-04 10:45:14,278 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(12) reason=CallClose
+2026-07-04 10:45:14,281 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987254266522305(13) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3750>
+  JP.6976       SKIP (fetch_kline(JP.6976): 无权限获取JP.6976的行情，请检查股票行情权限)
+2026-07-04 10:45:14,786 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(13) reason=CallClose
+2026-07-04 10:45:14,796 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987256415578317(14) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3ED0>
+  JP.6762       SKIP (fetch_kline(JP.6762): 无权限获取JP.6762的行情，请检查股票行情权限)
+2026-07-04 10:45:15,302 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(14) reason=CallClose
+2026-07-04 10:45:15,306 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987258556227223(15) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3D90>
+  JP.6971       SKIP (fetch_kline(JP.6971): 无权限获取JP.6971的行情，请检查股票行情权限)
+2026-07-04 10:45:15,809 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(15) reason=CallClose
+2026-07-04 10:45:15,826 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987260742087755(16) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3C50>
+  JP.6758       SKIP (fetch_kline(JP.6758): 无权限获取JP.6758的行情，请检查股票行情权限)
+2026-07-04 10:45:16,331 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(16) reason=CallClose
+2026-07-04 10:45:16,338 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987262878085990(17) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3B10>
+  JP.7731       SKIP (fetch_kline(JP.7731): 无权限获取JP.7731的行情，请检查股票行情权限)
+2026-07-04 10:45:16,853 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(17) reason=CallClose
+2026-07-04 10:45:16,886 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987265183696453(18) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E39D0>
+  JP.7751       SKIP (fetch_kline(JP.7751): 无权限获取JP.7751的行情，请检查股票行情权限)
+2026-07-04 10:45:17,394 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(18) reason=CallClose
+2026-07-04 10:45:17,410 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987267381474170(19) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3890>
+  JP.6752       SKIP (fetch_kline(JP.6752): 无权限获取JP.6752的行情，请检查股票行情权限)
+2026-07-04 10:45:17,918 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(19) reason=CallClose
+2026-07-04 10:45:17,928 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987269547691713(20) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3610>
+  JP.6753       SKIP (fetch_kline(JP.6753): 无权限获取JP.6753的行情，请检查股票行情权限)
+2026-07-04 10:45:18,437 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(20) reason=CallClose
+2026-07-04 10:45:18,477 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987271797612242(21) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E34D0>
+  JP.6861       SKIP (fetch_kline(JP.6861): 无权限获取JP.6861的行情，请检查股票行情权限)
+2026-07-04 10:45:18,983 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(21) reason=CallClose
+2026-07-04 10:45:18,994 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987274020164746(22) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1BD0>
+  JP.6954       SKIP (fetch_kline(JP.6954): 无权限获取JP.6954的行情，请检查股票行情权限)
+2026-07-04 10:45:19,502 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(22) reason=CallClose
+2026-07-04 10:45:19,510 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987276190712956(23) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E20D0>
+  JP.6645       SKIP (fetch_kline(JP.6645): 无权限获取JP.6645的行情，请检查股票行情权限)
+2026-07-04 10:45:20,015 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(23) reason=CallClose
+2026-07-04 10:45:20,019 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987278332884389(24) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3250>
+  JP.6702       SKIP (fetch_kline(JP.6702): 无权限获取JP.6702的行情，请检查股票行情权限)
+2026-07-04 10:45:20,523 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(24) reason=CallClose
+2026-07-04 10:45:20,526 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987280457965947(25) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3110>
+  JP.6501       SKIP (fetch_kline(JP.6501): 无权限获取JP.6501的行情，请检查股票行情权限)
+2026-07-04 10:45:21,031 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(25) reason=CallClose
+2026-07-04 10:45:21,053 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987282657892821(26) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2FD0>
+  JP.6503       SKIP (fetch_kline(JP.6503): 无权限获取JP.6503的行情，请检查股票行情权限)
+2026-07-04 10:45:21,558 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(26) reason=CallClose
+2026-07-04 10:45:21,561 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987284801045635(27) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2E90>
+  JP.6701       SKIP (fetch_kline(JP.6701): 无权限获取JP.6701的行情，请检查股票行情权限)
+2026-07-04 10:45:22,066 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(27) reason=CallClose
+2026-07-04 10:45:22,071 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987286934360208(28) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2D50>
+  JP.6594       SKIP (fetch_kline(JP.6594): 无权限获取JP.6594的行情，请检查股票行情权限)
+2026-07-04 10:45:22,576 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(28) reason=CallClose
+2026-07-04 10:45:22,585 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987289083464266(29) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2C10>
+  JP.9984       SKIP (fetch_kline(JP.9984): 无权限获取JP.9984的行情，请检查股票行情权限)
+2026-07-04 10:45:23,095 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(29) reason=CallClose
+2026-07-04 10:45:23,105 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987291258186909(30) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2AD0>
+  JP.6902       SKIP (fetch_kline(JP.6902): 无权限获取JP.6902的行情，请检查股票行情权限)
+2026-07-04 10:45:23,613 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(30) reason=CallClose
+2026-07-04 10:45:23,637 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987293492789611(31) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2990>
+  JP.7270       SKIP (fetch_kline(JP.7270): 无权限获取JP.7270的行情，请检查股票行情权限)
+2026-07-04 10:45:24,142 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(31) reason=CallClose
+2026-07-04 10:45:24,151 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987295653981328(32) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2850>
+  JP.7267       SKIP (fetch_kline(JP.7267): 无权限获取JP.7267的行情，请检查股票行情权限)
+2026-07-04 10:45:24,658 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(32) reason=CallClose
+2026-07-04 10:45:24,662 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987297805334732(33) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2710>
+  JP.7201       SKIP (fetch_kline(JP.7201): 无权限获取JP.7201的行情，请检查股票行情权限)
+2026-07-04 10:45:25,168 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(33) reason=CallClose
+2026-07-04 10:45:25,175 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987299950108684(34) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E25D0>
+  JP.8411       SKIP (fetch_kline(JP.8411): 无权限获取JP.8411的行情，请检查股票行情权限)
+2026-07-04 10:45:25,683 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(34) reason=CallClose
+2026-07-04 10:45:25,691 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987302110906268(35) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2490>
+  JP.8316       SKIP (fetch_kline(JP.8316): 无权限获取JP.8316的行情，请检查股票行情权限)
+2026-07-04 10:45:26,198 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(35) reason=CallClose
+2026-07-04 10:45:26,209 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987304273985955(36) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2350>
+  JP.8306       SKIP (fetch_kline(JP.8306): 无权限获取JP.8306的行情，请检查股票行情权限)
+2026-07-04 10:45:26,715 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(36) reason=CallClose
+2026-07-04 10:45:26,736 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987306506564358(37) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2210>
+  JP.8058       SKIP (fetch_kline(JP.8058): 无权限获取JP.8058的行情，请检查股票行情权限)
+2026-07-04 10:45:27,240 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(37) reason=CallClose
+2026-07-04 10:45:27,247 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987308645225253(38) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1E50>
+  JP.8031       SKIP (fetch_kline(JP.8031): 无权限获取JP.8031的行情，请检查股票行情权限)
+2026-07-04 10:45:27,749 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(38) reason=CallClose
+2026-07-04 10:45:27,781 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987310870130716(39) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1F90>
+  JP.8053       SKIP (fetch_kline(JP.8053): 无权限获取JP.8053的行情，请检查股票行情权限)
+2026-07-04 10:45:28,289 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(39) reason=CallClose
+2026-07-04 10:45:28,297 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987313045780388(40) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1D10>
+  JP.8002       SKIP (fetch_kline(JP.8002): 无权限获取JP.8002的行情，请检查股票行情权限)
+2026-07-04 10:45:28,806 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(40) reason=CallClose
+2026-07-04 10:45:28,816 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987315209759518(41) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E16D0>
+  JP.8001       SKIP (fetch_kline(JP.8001): 无权限获取JP.8001的行情，请检查股票行情权限)
+2026-07-04 10:45:29,322 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(41) reason=CallClose
+2026-07-04 10:45:29,333 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987317380606621(42) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1D10>
+  JP.4568       SKIP (fetch_kline(JP.4568): 无权限获取JP.4568的行情，请检查股票行情权限)
+2026-07-04 10:45:29,840 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(42) reason=CallClose
+2026-07-04 10:45:29,844 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987319534837477(43) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1F90>
+  JP.4502       SKIP (fetch_kline(JP.4502): 无权限获取JP.4502的行情，请检查股票行情权限)
+2026-07-04 10:45:30,349 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(43) reason=CallClose
+2026-07-04 10:45:30,356 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987321683074945(44) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1E50>
+  JP.4519       SKIP (fetch_kline(JP.4519): 无权限获取JP.4519的行情，请检查股票行情权限)
+2026-07-04 10:45:30,862 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(44) reason=CallClose
+2026-07-04 10:45:30,873 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987323839710270(45) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2210>
+  JP.4503       SKIP (fetch_kline(JP.4503): 无权限获取JP.4503的行情，请检查股票行情权限)
+2026-07-04 10:45:31,381 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(45) reason=CallClose
+2026-07-04 10:45:31,388 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987326004125037(46) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2350>
+  JP.4911       SKIP (fetch_kline(JP.4911): 无权限获取JP.4911的行情，请检查股票行情权限)
+2026-07-04 10:45:31,895 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(46) reason=CallClose
+2026-07-04 10:45:31,905 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987328170562768(47) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2490>
+  JP.9983       SKIP (fetch_kline(JP.9983): 无权限获取JP.9983的行情，请检查股票行情权限)
+2026-07-04 10:45:32,410 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(47) reason=CallClose
+2026-07-04 10:45:32,413 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987330307665124(48) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E25D0>
+  JP.9101       SKIP (fetch_kline(JP.9101): 无权限获取JP.9101的行情，请检查股票行情权限)
+2026-07-04 10:45:32,918 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(48) reason=CallClose
+2026-07-04 10:45:32,921 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987332445318295(49) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2710>
+  JP.9104       SKIP (fetch_kline(JP.9104): 无权限获取JP.9104的行情，请检查股票行情权限)
+2026-07-04 10:45:33,425 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(49) reason=CallClose
+2026-07-04 10:45:33,430 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987334574922031(50) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2850>
+  JP.9107       SKIP (fetch_kline(JP.9107): 无权限获取JP.9107的行情，请检查股票行情权限)
+2026-07-04 10:45:33,935 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(50) reason=CallClose
+  US.TSM        1006 bars
+  US.UMC        1006 bars
+  US.ASX        996 bars
+  US.CPNG       0 bars
+  US.PKX        1006 bars
+  US.KB         1006 bars
+  US.SHG        1006 bars
+  US.WF         1005 bars
+  US.KEP        1006 bars
+  US.LPL        1006 bars
+
+计算信号序列...
+[W1] avg_adx_breadth=26.49  qqq_adx=24.31  qqq_realized_vol=17.50%  avg_atr_pct=2.586%
+
+[W2] 2017-07-01 ~ 2021-07-01  fetching...
+拉取历史数据...
+  US.AAPL       1007 bars
+  US.MSFT       1007 bars
+  US.NVDA       1007 bars
+  US.AVGO       1007 bars
+  US.AMD        1007 bars
+  US.AMAT       1007 bars
+  US.ADI        1007 bars
+  US.MU         1007 bars
+  US.LRCX       1007 bars
+  US.KLAC       1007 bars
+  US.SNPS       1007 bars
+  US.CDNS       1007 bars
+  US.NXPI       1007 bars
+  US.MRVL       1007 bars
+  US.ON         1007 bars
+  US.ASML       1007 bars
+  US.QCOM       1007 bars
+  US.TXN        1007 bars
+  US.CSCO       1007 bars
+  US.ADBE       1007 bars
+  US.INTU       1007 bars
+  US.PANW       1007 bars
+  US.CRWD       519 bars
+  US.FTNT       1007 bars
+  US.ZS         830 bars
+  US.TEAM       1007 bars
+  US.WDAY       1007 bars
+  US.DDOG       450 bars
+  US.SNOW       200 bars
+  US.OKTA       1007 bars
+  US.VRSK       1007 bars
+  US.ADP        1007 bars
+  US.PAYX       1007 bars
+  US.AMZN       1007 bars
+  US.META       1007 bars
+  US.GOOGL      1007 bars
+  US.GOOG       1007 bars
+  US.NFLX       1007 bars
+  US.TSLA       1007 bars
+  US.BKNG       1007 bars
+  US.MELI       1007 bars
+  US.ABNB       140 bars
+  US.TTWO       1007 bars
+  US.EA         1007 bars
+  US.TTD        1007 bars
+  US.PDD        739 bars
+  US.PLTR       190 bars
+  US.APP        55 bars
+  US.ARM        0 bars
+  US.AMGN       1007 bars
+  US.GILD       1007 bars
+  US.VRTX       1007 bars
+  US.REGN       1007 bars
+  US.ISRG       1007 bars
+  US.IDXX       1007 bars
+  US.DXCM       1007 bars
+  US.ALGN       1007 bars
+  US.GEHC       0 bars
+  US.COST       1007 bars
+  US.SBUX       1007 bars
+  US.MDLZ       1007 bars
+  US.PEP        1007 bars
+  US.MNST       1007 bars
+  US.ORLY       1007 bars
+  US.ROST       1007 bars
+  US.KDP        751 bars
+  US.TMUS       1007 bars
+  US.CMCSA      1007 bars
+  US.HON        1007 bars
+  US.PCAR       1007 bars
+  US.FAST       1007 bars
+  US.CPRT       1007 bars
+  US.CTAS       1007 bars
+  US.BKR        1006 bars
+  US.FANG       1007 bars
+  US.LIN        671 bars
+  US.CEG        0 bars
+  US.EXC        1007 bars
+  US.AEP        1007 bars
+  US.XEL        1007 bars
+  US.QQQ        1229 bars
+  US.SPY        1007 bars
+2026-07-04 10:46:27,648 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987561986043687(51) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3B10>
+  JP.8035       SKIP (fetch_kline(JP.8035): 无权限获取JP.8035的行情，请检查股票行情权限)
+2026-07-04 10:46:28,154 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(51) reason=CallClose
+2026-07-04 10:46:28,171 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987564177172530(52) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E39D0>
+  JP.285A       SKIP (fetch_kline(JP.285A): 无权限获取JP.285A的行情，请检查股票行情权限)
+2026-07-04 10:46:28,675 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(52) reason=CallClose
+2026-07-04 10:46:28,700 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987566305686464(53) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3610>
+  JP.6146       SKIP (fetch_kline(JP.6146): 无权限获取JP.6146的行情，请检查股票行情权限)
+2026-07-04 10:46:29,203 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(53) reason=CallClose
+2026-07-04 10:46:29,206 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987568517565721(54) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E34D0>
+  JP.6920       SKIP (fetch_kline(JP.6920): 无权限获取JP.6920的行情，请检查股票行情权限)
+2026-07-04 10:46:29,710 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(54) reason=CallClose
+2026-07-04 10:46:29,716 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987570655095446(55) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3610>
+  JP.6857       SKIP (fetch_kline(JP.6857): 无权限获取JP.6857的行情，请检查股票行情权限)
+2026-07-04 10:46:30,221 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(55) reason=CallClose
+2026-07-04 10:46:30,225 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987572795923825(56) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E39D0>
+  JP.4063       SKIP (fetch_kline(JP.4063): 无权限获取JP.4063的行情，请检查股票行情权限)
+2026-07-04 10:46:30,727 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(56) reason=CallClose
+2026-07-04 10:46:30,754 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987575004079121(57) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3B10>
+  JP.3436       SKIP (fetch_kline(JP.3436): 无权限获取JP.3436的行情，请检查股票行情权限)
+2026-07-04 10:46:31,256 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(57) reason=CallClose
+2026-07-04 10:46:31,269 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987577175928547(58) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1BD0>
+  JP.6723       SKIP (fetch_kline(JP.6723): 无权限获取JP.6723的行情，请检查股票行情权限)
+2026-07-04 10:46:31,771 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(58) reason=CallClose
+2026-07-04 10:46:31,774 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987579290795984(59) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E20D0>
+  JP.6963       SKIP (fetch_kline(JP.6963): 无权限获取JP.6963的行情，请检查股票行情权限)
+2026-07-04 10:46:32,278 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(59) reason=CallClose
+2026-07-04 10:46:32,284 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987581414863002(60) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3250>
+  JP.4062       SKIP (fetch_kline(JP.4062): 无权限获取JP.4062的行情，请检查股票行情权限)
+2026-07-04 10:46:32,788 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(60) reason=CallClose
+2026-07-04 10:46:32,793 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987583555440618(61) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3110>
+  JP.5214       SKIP (fetch_kline(JP.5214): 无权限获取JP.5214的行情，请检查股票行情权限)
+2026-07-04 10:46:33,298 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(61) reason=CallClose
+2026-07-04 10:46:33,301 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987585676865551(62) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2FD0>
+  JP.6981       SKIP (fetch_kline(JP.6981): 无权限获取JP.6981的行情，请检查股票行情权限)
+2026-07-04 10:46:33,804 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(62) reason=CallClose
+2026-07-04 10:46:33,808 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987587822056831(63) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2E90>
+  JP.6976       SKIP (fetch_kline(JP.6976): 无权限获取JP.6976的行情，请检查股票行情权限)
+2026-07-04 10:46:34,311 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(63) reason=CallClose
+2026-07-04 10:46:34,325 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987589986585837(64) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2D50>
+  JP.6762       SKIP (fetch_kline(JP.6762): 无权限获取JP.6762的行情，请检查股票行情权限)
+2026-07-04 10:46:34,828 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(64) reason=CallClose
+2026-07-04 10:46:34,833 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987592117318049(65) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2C10>
+  JP.6971       SKIP (fetch_kline(JP.6971): 无权限获取JP.6971的行情，请检查股票行情权限)
+2026-07-04 10:46:35,337 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(65) reason=CallClose
+2026-07-04 10:46:35,344 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987594259529266(66) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2AD0>
+  JP.6758       SKIP (fetch_kline(JP.6758): 无权限获取JP.6758的行情，请检查股票行情权限)
+2026-07-04 10:46:35,848 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(66) reason=CallClose
+2026-07-04 10:46:35,851 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987596388363334(67) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1D10>
+  JP.7731       SKIP (fetch_kline(JP.7731): 无权限获取JP.7731的行情，请检查股票行情权限)
+2026-07-04 10:46:36,354 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(67) reason=CallClose
+2026-07-04 10:46:36,358 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987598513509227(68) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1F90>
+  JP.7751       SKIP (fetch_kline(JP.7751): 无权限获取JP.7751的行情，请检查股票行情权限)
+2026-07-04 10:46:36,861 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(68) reason=CallClose
+2026-07-04 10:46:36,865 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987600638996022(69) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1E50>
+  JP.6752       SKIP (fetch_kline(JP.6752): 无权限获取JP.6752的行情，请检查股票行情权限)
+2026-07-04 10:46:37,367 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(69) reason=CallClose
+2026-07-04 10:46:37,397 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987602869616285(70) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2210>
+  JP.6753       SKIP (fetch_kline(JP.6753): 无权限获取JP.6753的行情，请检查股票行情权限)
+2026-07-04 10:46:37,901 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(70) reason=CallClose
+2026-07-04 10:46:37,909 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987605014525640(71) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2350>
+  JP.6861       SKIP (fetch_kline(JP.6861): 无权限获取JP.6861的行情，请检查股票行情权限)
+2026-07-04 10:46:38,415 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(71) reason=CallClose
+2026-07-04 10:46:38,424 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987607170947405(72) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2490>
+  JP.6954       SKIP (fetch_kline(JP.6954): 无权限获取JP.6954的行情，请检查股票行情权限)
+2026-07-04 10:46:38,930 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(72) reason=CallClose
+2026-07-04 10:46:38,937 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987609334585013(73) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E25D0>
+  JP.6645       SKIP (fetch_kline(JP.6645): 无权限获取JP.6645的行情，请检查股票行情权限)
+2026-07-04 10:46:39,442 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(73) reason=CallClose
+2026-07-04 10:46:39,450 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987611482488793(74) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2710>
+  JP.6702       SKIP (fetch_kline(JP.6702): 无权限获取JP.6702的行情，请检查股票行情权限)
+2026-07-04 10:46:39,956 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(74) reason=CallClose
+2026-07-04 10:46:39,963 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987613626627632(75) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2850>
+  JP.6501       SKIP (fetch_kline(JP.6501): 无权限获取JP.6501的行情，请检查股票行情权限)
+2026-07-04 10:46:40,466 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(75) reason=CallClose
+2026-07-04 10:46:40,469 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987615760163086(76) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2990>
+  JP.6503       SKIP (fetch_kline(JP.6503): 无权限获取JP.6503的行情，请检查股票行情权限)
+2026-07-04 10:46:40,973 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(76) reason=CallClose
+2026-07-04 10:46:40,984 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987617916600575(77) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D7C50>
+  JP.6701       SKIP (fetch_kline(JP.6701): 无权限获取JP.6701的行情，请检查股票行情权限)
+2026-07-04 10:46:41,487 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(77) reason=CallClose
+2026-07-04 10:46:41,489 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987620042157013(78) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D7B10>
+  JP.6594       SKIP (fetch_kline(JP.6594): 无权限获取JP.6594的行情，请检查股票行情权限)
+2026-07-04 10:46:41,993 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(78) reason=CallClose
+2026-07-04 10:46:42,017 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987622165390275(79) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D79D0>
+  JP.9984       SKIP (fetch_kline(JP.9984): 无权限获取JP.9984的行情，请检查股票行情权限)
+2026-07-04 10:46:42,522 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(79) reason=CallClose
+2026-07-04 10:46:42,526 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987624376347386(80) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D7890>
+  JP.6902       SKIP (fetch_kline(JP.6902): 无权限获取JP.6902的行情，请检查股票行情权限)
+2026-07-04 10:46:43,029 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(80) reason=CallClose
+2026-07-04 10:46:43,033 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987626512357479(81) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D7750>
+  JP.7270       SKIP (fetch_kline(JP.7270): 无权限获取JP.7270的行情，请检查股票行情权限)
+2026-07-04 10:46:43,536 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(81) reason=CallClose
+2026-07-04 10:46:43,540 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987628637621594(82) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D7610>
+  JP.7267       SKIP (fetch_kline(JP.7267): 无权限获取JP.7267的行情，请检查股票行情权限)
+2026-07-04 10:46:44,042 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(82) reason=CallClose
+2026-07-04 10:46:44,059 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987630822188150(83) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D74D0>
+  JP.7201       SKIP (fetch_kline(JP.7201): 无权限获取JP.7201的行情，请检查股票行情权限)
+2026-07-04 10:46:44,561 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(83) reason=CallClose
+2026-07-04 10:46:44,565 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987632939965815(84) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D7390>
+  JP.8411       SKIP (fetch_kline(JP.8411): 无权限获取JP.8411的行情，请检查股票行情权限)
+2026-07-04 10:46:45,067 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(84) reason=CallClose
+2026-07-04 10:46:45,069 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987635055424663(85) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2990>
+  JP.8316       SKIP (fetch_kline(JP.8316): 无权限获取JP.8316的行情，请检查股票行情权限)
+2026-07-04 10:46:45,573 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(85) reason=CallClose
+2026-07-04 10:46:45,588 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987637231481674(86) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2850>
+  JP.8306       SKIP (fetch_kline(JP.8306): 无权限获取JP.8306的行情，请检查股票行情权限)
+2026-07-04 10:46:46,090 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(86) reason=CallClose
+2026-07-04 10:46:46,093 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987639349850506(87) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2710>
+  JP.8058       SKIP (fetch_kline(JP.8058): 无权限获取JP.8058的行情，请检查股票行情权限)
+2026-07-04 10:46:46,595 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(87) reason=CallClose
+2026-07-04 10:46:46,597 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987641464605570(88) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E25D0>
+  JP.8031       SKIP (fetch_kline(JP.8031): 无权限获取JP.8031的行情，请检查股票行情权限)
+2026-07-04 10:46:47,100 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(88) reason=CallClose
+2026-07-04 10:46:47,102 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987643579166495(89) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2490>
+  JP.8053       SKIP (fetch_kline(JP.8053): 无权限获取JP.8053的行情，请检查股票行情权限)
+2026-07-04 10:46:47,604 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(89) reason=CallClose
+2026-07-04 10:46:47,625 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987645768391000(90) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2350>
+  JP.8002       SKIP (fetch_kline(JP.8002): 无权限获取JP.8002的行情，请检查股票行情权限)
+2026-07-04 10:46:48,128 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(90) reason=CallClose
+2026-07-04 10:46:48,145 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987647951975307(91) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2210>
+  JP.8001       SKIP (fetch_kline(JP.8001): 无权限获取JP.8001的行情，请检查股票行情权限)
+2026-07-04 10:46:48,649 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(91) reason=CallClose
+2026-07-04 10:46:48,655 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987650094835658(92) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1E50>
+  JP.4568       SKIP (fetch_kline(JP.4568): 无权限获取JP.4568的行情，请检查股票行情权限)
+2026-07-04 10:46:49,160 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(92) reason=CallClose
+2026-07-04 10:46:49,167 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987652236873824(93) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1F90>
+  JP.4502       SKIP (fetch_kline(JP.4502): 无权限获取JP.4502的行情，请检查股票行情权限)
+2026-07-04 10:46:49,671 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(93) reason=CallClose
+2026-07-04 10:46:49,674 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987654366995410(94) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1D10>
+  JP.4519       SKIP (fetch_kline(JP.4519): 无权限获取JP.4519的行情，请检查股票行情权限)
+2026-07-04 10:46:50,176 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(94) reason=CallClose
+2026-07-04 10:46:50,180 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987656476989964(95) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2AD0>
+  JP.4503       SKIP (fetch_kline(JP.4503): 无权限获取JP.4503的行情，请检查股票行情权限)
+2026-07-04 10:46:50,686 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(95) reason=CallClose
+2026-07-04 10:46:50,690 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987658628704680(96) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2C10>
+  JP.4911       SKIP (fetch_kline(JP.4911): 无权限获取JP.4911的行情，请检查股票行情权限)
+2026-07-04 10:46:51,195 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(96) reason=CallClose
+2026-07-04 10:46:51,214 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987660813403142(97) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2D50>
+  JP.9983       SKIP (fetch_kline(JP.9983): 无权限获取JP.9983的行情，请检查股票行情权限)
+2026-07-04 10:46:51,718 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(97) reason=CallClose
+2026-07-04 10:46:51,722 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987662954259809(98) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2E90>
+  JP.9101       SKIP (fetch_kline(JP.9101): 无权限获取JP.9101的行情，请检查股票行情权限)
+2026-07-04 10:46:52,225 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(98) reason=CallClose
+2026-07-04 10:46:52,241 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987665135836862(99) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2FD0>
+  JP.9104       SKIP (fetch_kline(JP.9104): 无权限获取JP.9104的行情，请检查股票行情权限)
+2026-07-04 10:46:52,745 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(99) reason=CallClose
+2026-07-04 10:46:52,751 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987667267022178(100) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3110>
+  JP.9107       SKIP (fetch_kline(JP.9107): 无权限获取JP.9107的行情，请检查股票行情权限)
+2026-07-04 10:46:53,254 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(100) reason=CallClose
+  US.TSM        1007 bars
+  US.UMC        1007 bars
+  US.ASX        998 bars
+  US.CPNG       79 bars
+  US.PKX        1007 bars
+  US.KB         1007 bars
+  US.SHG        1007 bars
+  US.WF         985 bars
+  US.KEP        1007 bars
+  US.LPL        1007 bars
+
+计算信号序列...
+[W2] avg_adx_breadth=26.58  qqq_adx=24.40  qqq_realized_vol=24.19%  avg_atr_pct=3.269%
+
+[W3] 2020-01-01 ~ 2024-01-01  fetching...
+拉取历史数据...
+  US.AAPL       1006 bars
+  US.MSFT       1006 bars
+  US.NVDA       1006 bars
+  US.AVGO       1006 bars
+  US.AMD        1006 bars
+  US.AMAT       1006 bars
+  US.ADI        1006 bars
+  US.MU         1006 bars
+  US.LRCX       1006 bars
+  US.KLAC       1006 bars
+  US.SNPS       1006 bars
+  US.CDNS       1006 bars
+  US.NXPI       1006 bars
+  US.MRVL       1006 bars
+  US.ON         1006 bars
+  US.ASML       1006 bars
+  US.QCOM       1006 bars
+  US.TXN        1006 bars
+  US.CSCO       1006 bars
+  US.ADBE       1006 bars
+  US.INTU       1006 bars
+  US.PANW       1006 bars
+  US.CRWD       1006 bars
+  US.FTNT       1006 bars
+  US.ZS         1006 bars
+  US.TEAM       1006 bars
+  US.WDAY       1006 bars
+  US.DDOG       1006 bars
+  US.SNOW       828 bars
+  US.OKTA       1006 bars
+  US.VRSK       1006 bars
+  US.ADP        1006 bars
+  US.PAYX       1006 bars
+  US.AMZN       1006 bars
+  US.META       1006 bars
+  US.GOOGL      1006 bars
+  US.GOOG       1006 bars
+  US.NFLX       1006 bars
+  US.TSLA       1006 bars
+  US.BKNG       1006 bars
+  US.MELI       1006 bars
+  US.ABNB       768 bars
+  US.TTWO       1006 bars
+  US.EA         1006 bars
+  US.TTD        1006 bars
+  US.PDD        1006 bars
+  US.PLTR       818 bars
+  US.APP        683 bars
+  US.ARM        75 bars
+  US.AMGN       1006 bars
+  US.GILD       1006 bars
+  US.VRTX       1006 bars
+  US.REGN       1006 bars
+  US.ISRG       1006 bars
+  US.IDXX       1006 bars
+  US.DXCM       1006 bars
+  US.ALGN       1006 bars
+  US.GEHC       261 bars
+  US.COST       1006 bars
+  US.SBUX       1006 bars
+  US.MDLZ       1006 bars
+  US.PEP        1006 bars
+  US.MNST       1006 bars
+  US.ORLY       1006 bars
+  US.ROST       1006 bars
+  US.KDP        1006 bars
+  US.TMUS       1006 bars
+  US.CMCSA      1006 bars
+  US.HON        1006 bars
+  US.PCAR       1006 bars
+  US.FAST       1006 bars
+  US.CPRT       1006 bars
+  US.CTAS       1006 bars
+  US.BKR        1006 bars
+  US.FANG       1006 bars
+  US.LIN        1006 bars
+  US.CEG        490 bars
+  US.EXC        1006 bars
+  US.AEP        1006 bars
+  US.XEL        1006 bars
+  US.QQQ        1227 bars
+  US.SPY        1006 bars
+2026-07-04 10:47:46,778 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987893881146830(101) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4050>
+  JP.8035       SKIP (fetch_kline(JP.8035): 无权限获取JP.8035的行情，请检查股票行情权限)
+2026-07-04 10:47:47,283 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(101) reason=CallClose
+2026-07-04 10:47:47,287 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987896016370273(102) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4190>
+  JP.285A       SKIP (fetch_kline(JP.285A): 无权限获取JP.285A的行情，请检查股票行情权限)
+2026-07-04 10:47:47,791 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(102) reason=CallClose
+2026-07-04 10:47:47,796 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987898146116939(103) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D42D0>
+  JP.6146       SKIP (fetch_kline(JP.6146): 无权限获取JP.6146的行情，请检查股票行情权限)
+2026-07-04 10:47:48,300 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(103) reason=CallClose
+2026-07-04 10:47:48,306 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987900292789951(104) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4410>
+  JP.6920       SKIP (fetch_kline(JP.6920): 无权限获取JP.6920的行情，请检查股票行情权限)
+2026-07-04 10:47:48,811 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(104) reason=CallClose
+2026-07-04 10:47:48,829 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987902479976552(105) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4550>
+  JP.6857       SKIP (fetch_kline(JP.6857): 无权限获取JP.6857的行情，请检查股票行情权限)
+2026-07-04 10:47:49,333 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(105) reason=CallClose
+2026-07-04 10:47:49,338 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987904604059044(106) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4690>
+  JP.4063       SKIP (fetch_kline(JP.4063): 无权限获取JP.4063的行情，请检查股票行情权限)
+2026-07-04 10:47:49,841 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(106) reason=CallClose
+2026-07-04 10:47:49,846 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987906741609626(107) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D47D0>
+  JP.3436       SKIP (fetch_kline(JP.3436): 无权限获取JP.3436的行情，请检查股票行情权限)
+2026-07-04 10:47:50,351 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(107) reason=CallClose
+2026-07-04 10:47:50,373 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987908957729209(108) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4910>
+  JP.6723       SKIP (fetch_kline(JP.6723): 无权限获取JP.6723的行情，请检查股票行情权限)
+2026-07-04 10:47:50,878 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(108) reason=CallClose
+2026-07-04 10:47:50,883 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987911102278784(109) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4A50>
+  JP.6963       SKIP (fetch_kline(JP.6963): 无权限获取JP.6963的行情，请检查股票行情权限)
+2026-07-04 10:47:51,386 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(109) reason=CallClose
+2026-07-04 10:47:51,402 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987913266219041(110) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4B90>
+  JP.4062       SKIP (fetch_kline(JP.4062): 无权限获取JP.4062的行情，请检查股票行情权限)
+2026-07-04 10:47:51,906 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(110) reason=CallClose
+2026-07-04 10:47:51,932 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987915498409611(111) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4CD0>
+  JP.5214       SKIP (fetch_kline(JP.5214): 无权限获取JP.5214的行情，请检查股票行情权限)
+2026-07-04 10:47:52,437 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(111) reason=CallClose
+2026-07-04 10:47:52,461 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987917713796304(112) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4E10>
+  JP.6981       SKIP (fetch_kline(JP.6981): 无权限获取JP.6981的行情，请检查股票行情权限)
+2026-07-04 10:47:52,963 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(112) reason=CallClose
+2026-07-04 10:47:52,982 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987919902121781(113) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4F50>
+  JP.6976       SKIP (fetch_kline(JP.6976): 无权限获取JP.6976的行情，请检查股票行情权限)
+2026-07-04 10:47:53,486 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(113) reason=CallClose
+2026-07-04 10:47:53,490 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987922021673208(114) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5090>
+  JP.6762       SKIP (fetch_kline(JP.6762): 无权限获取JP.6762的行情，请检查股票行情权限)
+2026-07-04 10:47:53,995 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(114) reason=CallClose
+2026-07-04 10:47:54,015 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987924224738251(115) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D51D0>
+  JP.6971       SKIP (fetch_kline(JP.6971): 无权限获取JP.6971的行情，请检查股票行情权限)
+2026-07-04 10:47:54,519 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(115) reason=CallClose
+2026-07-04 10:47:54,539 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987926419087748(116) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5310>
+  JP.6758       SKIP (fetch_kline(JP.6758): 无权限获取JP.6758的行情，请检查股票行情权限)
+2026-07-04 10:47:55,044 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(116) reason=CallClose
+2026-07-04 10:47:55,063 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987928619027317(117) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5450>
+  JP.7731       SKIP (fetch_kline(JP.7731): 无权限获取JP.7731的行情，请检查股票行情权限)
+2026-07-04 10:47:55,566 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(117) reason=CallClose
+2026-07-04 10:47:55,569 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987930753189111(118) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5590>
+  JP.7751       SKIP (fetch_kline(JP.7751): 无权限获取JP.7751的行情，请检查股票行情权限)
+2026-07-04 10:47:56,074 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(118) reason=CallClose
+2026-07-04 10:47:56,083 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987932895302726(119) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D56D0>
+  JP.6752       SKIP (fetch_kline(JP.6752): 无权限获取JP.6752的行情，请检查股票行情权限)
+2026-07-04 10:47:56,589 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(119) reason=CallClose
+2026-07-04 10:47:56,592 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987935040543160(120) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5810>
+  JP.6753       SKIP (fetch_kline(JP.6753): 无权限获取JP.6753的行情，请检查股票行情权限)
+2026-07-04 10:47:57,095 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(120) reason=CallClose
+2026-07-04 10:47:57,098 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987937164181316(121) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5950>
+  JP.6861       SKIP (fetch_kline(JP.6861): 无权限获取JP.6861的行情，请检查股票行情权限)
+2026-07-04 10:47:57,602 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(121) reason=CallClose
+2026-07-04 10:47:57,608 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987939303571742(122) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5A90>
+  JP.6954       SKIP (fetch_kline(JP.6954): 无权限获取JP.6954的行情，请检查股票行情权限)
+2026-07-04 10:47:58,115 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(122) reason=CallClose
+2026-07-04 10:47:58,142 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987941548293650(123) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5BD0>
+  JP.6645       SKIP (fetch_kline(JP.6645): 无权限获取JP.6645的行情，请检查股票行情权限)
+2026-07-04 10:47:58,645 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(123) reason=CallClose
+2026-07-04 10:47:58,648 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987943662614870(124) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5D10>
+  JP.6702       SKIP (fetch_kline(JP.6702): 无权限获取JP.6702的行情，请检查股票行情权限)
+2026-07-04 10:47:59,150 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(124) reason=CallClose
+2026-07-04 10:47:59,153 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987945785489650(125) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5E50>
+  JP.6501       SKIP (fetch_kline(JP.6501): 无权限获取JP.6501的行情，请检查股票行情权限)
+2026-07-04 10:47:59,657 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(125) reason=CallClose
+2026-07-04 10:47:59,665 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987947921529894(126) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5D10>
+  JP.6503       SKIP (fetch_kline(JP.6503): 无权限获取JP.6503的行情，请检查股票行情权限)
+2026-07-04 10:48:00,167 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(126) reason=CallClose
+2026-07-04 10:48:00,181 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987950043562843(127) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5BD0>
+  JP.6701       SKIP (fetch_kline(JP.6701): 无权限获取JP.6701的行情，请检查股票行情权限)
+2026-07-04 10:48:00,686 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(127) reason=CallClose
+2026-07-04 10:48:00,692 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987952237645192(128) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5A90>
+  JP.6594       SKIP (fetch_kline(JP.6594): 无权限获取JP.6594的行情，请检查股票行情权限)
+2026-07-04 10:48:01,195 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(128) reason=CallClose
+2026-07-04 10:48:01,209 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987954410433770(129) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5950>
+  JP.9984       SKIP (fetch_kline(JP.9984): 无权限获取JP.9984的行情，请检查股票行情权限)
+2026-07-04 10:48:01,713 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(129) reason=CallClose
+2026-07-04 10:48:01,716 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987956535624719(130) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5810>
+  JP.6902       SKIP (fetch_kline(JP.6902): 无权限获取JP.6902的行情，请检查股票行情权限)
+2026-07-04 10:48:02,219 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(130) reason=CallClose
+2026-07-04 10:48:02,222 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987958656510316(131) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D56D0>
+  JP.7270       SKIP (fetch_kline(JP.7270): 无权限获取JP.7270的行情，请检查股票行情权限)
+2026-07-04 10:48:02,725 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(131) reason=CallClose
+2026-07-04 10:48:02,728 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987960777229632(132) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5590>
+  JP.7267       SKIP (fetch_kline(JP.7267): 无权限获取JP.7267的行情，请检查股票行情权限)
+2026-07-04 10:48:03,233 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(132) reason=CallClose
+2026-07-04 10:48:03,240 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987962919932929(133) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5450>
+  JP.7201       SKIP (fetch_kline(JP.7201): 无权限获取JP.7201的行情，请检查股票行情权限)
+2026-07-04 10:48:03,742 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(133) reason=CallClose
+2026-07-04 10:48:03,750 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987965039511497(134) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5310>
+  JP.8411       SKIP (fetch_kline(JP.8411): 无权限获取JP.8411的行情，请检查股票行情权限)
+2026-07-04 10:48:04,255 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(134) reason=CallClose
+2026-07-04 10:48:04,273 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987967262542247(135) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D51D0>
+  JP.8316       SKIP (fetch_kline(JP.8316): 无权限获取JP.8316的行情，请检查股票行情权限)
+2026-07-04 10:48:04,777 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(135) reason=CallClose
+2026-07-04 10:48:04,793 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987969440100926(136) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5090>
+  JP.8306       SKIP (fetch_kline(JP.8306): 无权限获取JP.8306的行情，请检查股票行情权限)
+2026-07-04 10:48:05,296 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(136) reason=CallClose
+2026-07-04 10:48:05,301 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987971567056394(137) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4F50>
+  JP.8058       SKIP (fetch_kline(JP.8058): 无权限获取JP.8058的行情，请检查股票行情权限)
+2026-07-04 10:48:05,804 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(137) reason=CallClose
+2026-07-04 10:48:05,808 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987973698547506(138) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4E10>
+  JP.8031       SKIP (fetch_kline(JP.8031): 无权限获取JP.8031的行情，请检查股票行情权限)
+2026-07-04 10:48:06,312 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(138) reason=CallClose
+2026-07-04 10:48:06,315 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987975824897433(139) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4CD0>
+  JP.8053       SKIP (fetch_kline(JP.8053): 无权限获取JP.8053的行情，请检查股票行情权限)
+2026-07-04 10:48:06,819 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(139) reason=CallClose
+2026-07-04 10:48:06,834 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987978003318980(140) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4B90>
+  JP.8002       SKIP (fetch_kline(JP.8002): 无权限获取JP.8002的行情，请检查股票行情权限)
+2026-07-04 10:48:07,337 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(140) reason=CallClose
+2026-07-04 10:48:07,342 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987980127706192(141) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4A50>
+  JP.8001       SKIP (fetch_kline(JP.8001): 无权限获取JP.8001的行情，请检查股票行情权限)
+2026-07-04 10:48:07,846 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(141) reason=CallClose
+2026-07-04 10:48:07,851 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987982261523012(142) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4910>
+  JP.4568       SKIP (fetch_kline(JP.4568): 无权限获取JP.4568的行情，请检查股票行情权限)
+2026-07-04 10:48:08,356 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(142) reason=CallClose
+2026-07-04 10:48:08,360 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987984410870347(143) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D47D0>
+  JP.4502       SKIP (fetch_kline(JP.4502): 无权限获取JP.4502的行情，请检查股票行情权限)
+2026-07-04 10:48:08,864 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(143) reason=CallClose
+2026-07-04 10:48:08,867 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987986516948425(144) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4690>
+  JP.4519       SKIP (fetch_kline(JP.4519): 无权限获取JP.4519的行情，请检查股票行情权限)
+2026-07-04 10:48:09,369 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(144) reason=CallClose
+2026-07-04 10:48:09,371 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987988644951082(145) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4550>
+  JP.4503       SKIP (fetch_kline(JP.4503): 无权限获取JP.4503的行情，请检查股票行情权限)
+2026-07-04 10:48:09,873 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(145) reason=CallClose
+2026-07-04 10:48:09,876 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987990763473346(146) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4410>
+  JP.4911       SKIP (fetch_kline(JP.4911): 无权限获取JP.4911的行情，请检查股票行情权限)
+2026-07-04 10:48:10,380 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(146) reason=CallClose
+2026-07-04 10:48:10,407 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987992984039948(147) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D42D0>
+  JP.9983       SKIP (fetch_kline(JP.9983): 无权限获取JP.9983的行情，请检查股票行情权限)
+2026-07-04 10:48:10,913 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(147) reason=CallClose
+2026-07-04 10:48:10,918 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987995131517249(148) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4190>
+  JP.9101       SKIP (fetch_kline(JP.9101): 无权限获取JP.9101的行情，请检查股票行情权限)
+2026-07-04 10:48:11,422 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(148) reason=CallClose
+2026-07-04 10:48:11,425 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987997256791361(149) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D4050>
+  JP.9104       SKIP (fetch_kline(JP.9104): 无权限获取JP.9104的行情，请检查股票行情权限)
+2026-07-04 10:48:11,931 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(149) reason=CallClose
+2026-07-04 10:48:11,935 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478987999400397216(150) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D60D0>
+  JP.9107       SKIP (fetch_kline(JP.9107): 无权限获取JP.9107的行情，请检查股票行情权限)
+2026-07-04 10:48:12,439 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(150) reason=CallClose
+  US.TSM        1006 bars
+  US.UMC        1006 bars
+  US.ASX        1006 bars
+  US.CPNG       707 bars
+  US.PKX        1006 bars
+  US.KB         1006 bars
+  US.SHG        1006 bars
+  US.WF         1006 bars
+  US.KEP        1006 bars
+  US.LPL        1006 bars
+
+计算信号序列...
+[W3] avg_adx_breadth=25.28  qqq_adx=25.56  qqq_realized_vol=27.27%  avg_atr_pct=3.371%
+
+[W4] 2022-07-01 ~ 2026-07-03  fetching...
+拉取历史数据...
+  US.AAPL       1004 bars
+  US.MSFT       1004 bars
+  US.NVDA       1004 bars
+  US.AVGO       1004 bars
+  US.AMD        1004 bars
+  US.AMAT       1004 bars
+  US.ADI        1004 bars
+  US.MU         1004 bars
+  US.LRCX       1004 bars
+  US.KLAC       1004 bars
+  US.SNPS       1004 bars
+  US.CDNS       1004 bars
+  US.NXPI       1004 bars
+  US.MRVL       1004 bars
+  US.ON         1004 bars
+  US.ASML       1004 bars
+  US.QCOM       1004 bars
+  US.TXN        1004 bars
+  US.CSCO       1004 bars
+  US.ADBE       1004 bars
+  US.INTU       1004 bars
+  US.PANW       1004 bars
+  US.CRWD       1004 bars
+  US.FTNT       1004 bars
+  US.ZS         1004 bars
+  US.TEAM       1004 bars
+  US.WDAY       1004 bars
+  US.DDOG       1004 bars
+  US.SNOW       1004 bars
+  US.OKTA       1004 bars
+  US.VRSK       1004 bars
+  US.ADP        1004 bars
+  US.PAYX       1004 bars
+  US.AMZN       1004 bars
+  US.META       1004 bars
+  US.GOOGL      1004 bars
+  US.GOOG       1004 bars
+  US.NFLX       1004 bars
+  US.TSLA       1004 bars
+  US.BKNG       1004 bars
+  US.MELI       1004 bars
+  US.ABNB       1004 bars
+  US.TTWO       1004 bars
+  US.EA         1004 bars
+  US.TTD        1004 bars
+  US.PDD        1004 bars
+  US.PLTR       1004 bars
+  US.APP        1004 bars
+  US.ARM        702 bars
+  US.AMGN       1004 bars
+  US.GILD       1004 bars
+  US.VRTX       1004 bars
+  US.REGN       1004 bars
+  US.ISRG       1004 bars
+  US.IDXX       1004 bars
+  US.DXCM       1004 bars
+  US.ALGN       1004 bars
+  US.GEHC       888 bars
+  US.COST       1004 bars
+  US.SBUX       1004 bars
+  US.MDLZ       1004 bars
+  US.PEP        1004 bars
+  US.MNST       1004 bars
+  US.ORLY       1004 bars
+  US.ROST       1004 bars
+  US.KDP        1004 bars
+  US.TMUS       1004 bars
+  US.CMCSA      1004 bars
+  US.HON        1004 bars
+  US.PCAR       1004 bars
+  US.FAST       1004 bars
+  US.CPRT       1004 bars
+  US.CTAS       1004 bars
+  US.BKR        1004 bars
+  US.FANG       1004 bars
+  US.LIN        1004 bars
+  US.CEG        1004 bars
+  US.EXC        1004 bars
+  US.AEP        1004 bars
+  US.XEL        1004 bars
+  US.QQQ        1225 bars
+  US.SPY        1004 bars
+2026-07-04 10:49:06,255 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988227233347857(151) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3890>
+  JP.8035       SKIP (fetch_kline(JP.8035): 无权限获取JP.8035的行情，请检查股票行情权限)
+2026-07-04 10:49:06,759 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(151) reason=CallClose
+2026-07-04 10:49:06,789 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988229462588947(152) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3D90>
+  JP.285A       SKIP (fetch_kline(JP.285A): 无权限获取JP.285A的行情，请检查股票行情权限)
+2026-07-04 10:49:07,295 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(152) reason=CallClose
+2026-07-04 10:49:07,313 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988231601311471(153) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3C50>
+  JP.6146       SKIP (fetch_kline(JP.6146): 无权限获取JP.6146的行情，请检查股票行情权限)
+2026-07-04 10:49:07,817 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(153) reason=CallClose
+2026-07-04 10:49:07,821 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988233799875235(154) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3750>
+  JP.6920       SKIP (fetch_kline(JP.6920): 无权限获取JP.6920的行情，请检查股票行情权限)
+2026-07-04 10:49:08,327 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(154) reason=CallClose
+2026-07-04 10:49:08,337 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988235954231149(155) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3390>
+  JP.6857       SKIP (fetch_kline(JP.6857): 无权限获取JP.6857的行情，请检查股票行情权限)
+2026-07-04 10:49:08,842 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(155) reason=CallClose
+2026-07-04 10:49:08,848 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988238102519329(156) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1590>
+  JP.4063       SKIP (fetch_kline(JP.4063): 无权限获取JP.4063的行情，请检查股票行情权限)
+2026-07-04 10:49:09,352 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(156) reason=CallClose
+2026-07-04 10:49:09,357 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988240238744070(157) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3390>
+  JP.3436       SKIP (fetch_kline(JP.3436): 无权限获取JP.3436的行情，请检查股票行情权限)
+2026-07-04 10:49:09,865 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(157) reason=CallClose
+2026-07-04 10:49:09,880 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988242436215221(158) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3750>
+  JP.6723       SKIP (fetch_kline(JP.6723): 无权限获取JP.6723的行情，请检查股票行情权限)
+2026-07-04 10:49:10,385 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(158) reason=CallClose
+2026-07-04 10:49:10,391 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988244574418473(159) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3C50>
+  JP.6963       SKIP (fetch_kline(JP.6963): 无权限获取JP.6963的行情，请检查股票行情权限)
+2026-07-04 10:49:10,896 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(159) reason=CallClose
+2026-07-04 10:49:10,904 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988246725740985(160) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3D90>
+  JP.4062       SKIP (fetch_kline(JP.4062): 无权限获取JP.4062的行情，请检查股票行情权限)
+2026-07-04 10:49:11,409 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(160) reason=CallClose
+2026-07-04 10:49:11,415 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988248869018154(161) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3890>
+  JP.5214       SKIP (fetch_kline(JP.5214): 无权限获取JP.5214的行情，请检查股票行情权限)
+2026-07-04 10:49:11,919 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(161) reason=CallClose
+2026-07-04 10:49:11,924 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988251005239008(162) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3ED0>
+  JP.6981       SKIP (fetch_kline(JP.6981): 无权限获取JP.6981的行情，请检查股票行情权限)
+2026-07-04 10:49:12,427 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(162) reason=CallClose
+2026-07-04 10:49:12,431 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988253132166305(163) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E16D0>
+  JP.6976       SKIP (fetch_kline(JP.6976): 无权限获取JP.6976的行情，请检查股票行情权限)
+2026-07-04 10:49:12,934 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(163) reason=CallClose
+2026-07-04 10:49:12,938 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988255260272965(164) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3110>
+  JP.6762       SKIP (fetch_kline(JP.6762): 无权限获取JP.6762的行情，请检查股票行情权限)
+2026-07-04 10:49:13,442 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(164) reason=CallClose
+2026-07-04 10:49:13,450 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988257393878383(165) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2FD0>
+  JP.6971       SKIP (fetch_kline(JP.6971): 无权限获取JP.6971的行情，请检查股票行情权限)
+2026-07-04 10:49:13,957 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(165) reason=CallClose
+2026-07-04 10:49:13,962 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988259553299818(166) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2E90>
+  JP.6758       SKIP (fetch_kline(JP.6758): 无权限获取JP.6758的行情，请检查股票行情权限)
+2026-07-04 10:49:14,467 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(166) reason=CallClose
+2026-07-04 10:49:14,476 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988261709872562(167) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2D50>
+  JP.7731       SKIP (fetch_kline(JP.7731): 无权限获取JP.7731的行情，请检查股票行情权限)
+2026-07-04 10:49:14,981 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(167) reason=CallClose
+2026-07-04 10:49:14,991 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988263825003455(168) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2C10>
+  JP.7751       SKIP (fetch_kline(JP.7751): 无权限获取JP.7751的行情，请检查股票行情权限)
+2026-07-04 10:49:15,497 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(168) reason=CallClose
+2026-07-04 10:49:15,505 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988266009761588(169) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2AD0>
+  JP.6752       SKIP (fetch_kline(JP.6752): 无权限获取JP.6752的行情，请检查股票行情权限)
+2026-07-04 10:49:16,012 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(169) reason=CallClose
+2026-07-04 10:49:16,022 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988268185647609(170) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1D10>
+  JP.6753       SKIP (fetch_kline(JP.6753): 无权限获取JP.6753的行情，请检查股票行情权限)
+2026-07-04 10:49:16,530 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(170) reason=CallClose
+2026-07-04 10:49:16,540 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988270320694728(171) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1F90>
+  JP.6861       SKIP (fetch_kline(JP.6861): 无权限获取JP.6861的行情，请检查股票行情权限)
+2026-07-04 10:49:17,045 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(171) reason=CallClose
+2026-07-04 10:49:17,056 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988272497313020(172) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1E50>
+  JP.6954       SKIP (fetch_kline(JP.6954): 无权限获取JP.6954的行情，请检查股票行情权限)
+2026-07-04 10:49:17,560 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(172) reason=CallClose
+2026-07-04 10:49:17,589 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988274764989214(173) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2210>
+  JP.6645       SKIP (fetch_kline(JP.6645): 无权限获取JP.6645的行情，请检查股票行情权限)
+2026-07-04 10:49:18,094 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(173) reason=CallClose
+2026-07-04 10:49:18,103 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988276916620891(174) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2350>
+  JP.6702       SKIP (fetch_kline(JP.6702): 无权限获取JP.6702的行情，请检查股票行情权限)
+2026-07-04 10:49:18,608 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(174) reason=CallClose
+2026-07-04 10:49:18,617 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988279035546955(175) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2490>
+  JP.6501       SKIP (fetch_kline(JP.6501): 无权限获取JP.6501的行情，请检查股票行情权限)
+2026-07-04 10:49:19,124 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(175) reason=CallClose
+2026-07-04 10:49:19,131 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988281208356031(176) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E25D0>
+  JP.6503       SKIP (fetch_kline(JP.6503): 无权限获取JP.6503的行情，请检查股票行情权限)
+2026-07-04 10:49:19,636 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(176) reason=CallClose
+2026-07-04 10:49:19,668 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988283480467510(177) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2710>
+  JP.6701       SKIP (fetch_kline(JP.6701): 无权限获取JP.6701的行情，请检查股票行情权限)
+2026-07-04 10:49:20,174 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(177) reason=CallClose
+2026-07-04 10:49:20,208 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988285731580077(178) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2850>
+  JP.6594       SKIP (fetch_kline(JP.6594): 无权限获取JP.6594的行情，请检查股票行情权限)
+2026-07-04 10:49:20,712 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(178) reason=CallClose
+2026-07-04 10:49:20,731 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988287939197740(179) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2990>
+  JP.9984       SKIP (fetch_kline(JP.9984): 无权限获取JP.9984的行情，请检查股票行情权限)
+2026-07-04 10:49:21,234 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(179) reason=CallClose
+2026-07-04 10:49:21,245 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988290093758168(180) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3250>
+  JP.6902       SKIP (fetch_kline(JP.6902): 无权限获取JP.6902的行情，请检查股票行情权限)
+2026-07-04 10:49:21,751 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(180) reason=CallClose
+2026-07-04 10:49:21,780 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988292336567814(181) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E20D0>
+  JP.7270       SKIP (fetch_kline(JP.7270): 无权限获取JP.7270的行情，请检查股票行情权限)
+2026-07-04 10:49:22,286 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(181) reason=CallClose
+2026-07-04 10:49:22,296 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988294491805196(182) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1BD0>
+  JP.7267       SKIP (fetch_kline(JP.7267): 无权限获取JP.7267的行情，请检查股票行情权限)
+2026-07-04 10:49:22,803 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(182) reason=CallClose
+2026-07-04 10:49:22,811 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988296658931689(183) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3B10>
+  JP.7201       SKIP (fetch_kline(JP.7201): 无权限获取JP.7201的行情，请检查股票行情权限)
+2026-07-04 10:49:23,317 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(183) reason=CallClose
+2026-07-04 10:49:23,327 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988298826844979(184) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E39D0>
+  JP.8411       SKIP (fetch_kline(JP.8411): 无权限获取JP.8411的行情，请检查股票行情权限)
+2026-07-04 10:49:23,835 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(184) reason=CallClose
+2026-07-04 10:49:23,842 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988300996253553(185) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3610>
+  JP.8316       SKIP (fetch_kline(JP.8316): 无权限获取JP.8316的行情，请检查股票行情权限)
+2026-07-04 10:49:24,346 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(185) reason=CallClose
+2026-07-04 10:49:24,349 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988303121738631(186) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6796D5E50>
+  JP.8306       SKIP (fetch_kline(JP.8306): 无权限获取JP.8306的行情，请检查股票行情权限)
+2026-07-04 10:49:24,853 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(186) reason=CallClose
+2026-07-04 10:49:24,881 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988305343692774(187) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3610>
+  JP.8058       SKIP (fetch_kline(JP.8058): 无权限获取JP.8058的行情，请检查股票行情权限)
+2026-07-04 10:49:25,387 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(187) reason=CallClose
+2026-07-04 10:49:25,394 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988307494586034(188) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E39D0>
+  JP.8031       SKIP (fetch_kline(JP.8031): 无权限获取JP.8031的行情，请检查股票行情权限)
+2026-07-04 10:49:25,898 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(188) reason=CallClose
+2026-07-04 10:49:25,907 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988309648261432(189) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3B10>
+  JP.8053       SKIP (fetch_kline(JP.8053): 无权限获取JP.8053的行情，请检查股票行情权限)
+2026-07-04 10:49:26,413 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(189) reason=CallClose
+2026-07-04 10:49:26,423 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988311807449235(190) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1BD0>
+  JP.8002       SKIP (fetch_kline(JP.8002): 无权限获取JP.8002的行情，请检查股票行情权限)
+2026-07-04 10:49:26,930 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(190) reason=CallClose
+2026-07-04 10:49:26,940 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988313955627933(191) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E20D0>
+  JP.8001       SKIP (fetch_kline(JP.8001): 无权限获取JP.8001的行情，请检查股票行情权限)
+2026-07-04 10:49:27,447 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(191) reason=CallClose
+2026-07-04 10:49:27,457 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988316148745175(192) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E3250>
+  JP.4568       SKIP (fetch_kline(JP.4568): 无权限获取JP.4568的行情，请检查股票行情权限)
+2026-07-04 10:49:27,963 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(192) reason=CallClose
+2026-07-04 10:49:27,973 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988318309597896(193) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2990>
+  JP.4502       SKIP (fetch_kline(JP.4502): 无权限获取JP.4502的行情，请检查股票行情权限)
+2026-07-04 10:49:28,480 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(193) reason=CallClose
+2026-07-04 10:49:28,489 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988320467952813(194) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2850>
+  JP.4519       SKIP (fetch_kline(JP.4519): 无权限获取JP.4519的行情，请检查股票行情权限)
+2026-07-04 10:49:28,997 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(194) reason=CallClose
+2026-07-04 10:49:29,000 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988322635497565(195) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2710>
+  JP.4503       SKIP (fetch_kline(JP.4503): 无权限获取JP.4503的行情，请检查股票行情权限)
+2026-07-04 10:49:29,504 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(195) reason=CallClose
+2026-07-04 10:49:29,515 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988324776694324(196) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E25D0>
+  JP.4911       SKIP (fetch_kline(JP.4911): 无权限获取JP.4911的行情，请检查股票行情权限)
+2026-07-04 10:49:30,022 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(196) reason=CallClose
+2026-07-04 10:49:30,038 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988326979032804(197) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2490>
+  JP.9983       SKIP (fetch_kline(JP.9983): 无权限获取JP.9983的行情，请检查股票行情权限)
+2026-07-04 10:49:30,542 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(197) reason=CallClose
+2026-07-04 10:49:30,556 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988329152814532(198) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2350>
+  JP.9101       SKIP (fetch_kline(JP.9101): 无权限获取JP.9101的行情，请检查股票行情权限)
+2026-07-04 10:49:31,061 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(198) reason=CallClose
+2026-07-04 10:49:31,065 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988331290711331(199) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E2210>
+  JP.9104       SKIP (fetch_kline(JP.9104): 无权限获取JP.9104的行情，请检查股票行情权限)
+2026-07-04 10:49:31,569 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(199) reason=CallClose
+2026-07-04 10:49:31,578 | 29064 | 14480 | [open_context_base.py:411] _init_connect_sync: New connect ready: conn=7478988333432353212(200) context=<moomoo.quote.open_quote_context.OpenQuoteContext object at 0x000002D6794E1E50>
+  JP.9107       SKIP (fetch_kline(JP.9107): 无权限获取JP.9107的行情，请检查股票行情权限)
+2026-07-04 10:49:32,084 | 29064 | 18888 | [open_context_base.py:521] on_disconnect: Disconnected: conn=0(200) reason=CallClose
+  US.TSM        1004 bars
+  US.UMC        1004 bars
+  US.ASX        1004 bars
+  US.CPNG       1004 bars
+  US.PKX        1004 bars
+  US.KB         1004 bars
+  US.SHG        1004 bars
+  US.WF         1004 bars
+  US.KEP        1004 bars
+  US.LPL        1004 bars
+
+计算信号序列...
+[W4] avg_adx_breadth=25.56  qqq_adx=25.33  qqq_realized_vol=21.61%  avg_atr_pct=2.984%
+
+==========================================================================================
+窗口市场特征 vs 最佳ATR
+==========================================================================================
+窗口      最佳ATR     横截面ADX   QQQ_ADX      QQQ已实现波动%     横截面ATR%
+W1       5.00      26.49     24.31          17.50       2.586
+W2       3.25      26.58     24.40          24.19       3.269
+W3       3.75      25.28     25.56          27.27       3.371
+W4       5.75      25.56     25.33          21.61       2.984
+
+==========================================================================================
+相关系数 (Pearson r, n=4 -- 极小样本，仅供参考，不构成统计显著性证据)
+==========================================================================================
+  best_atr vs avg_adx_breadth       : r = -0.218
+  best_atr vs qqq_adx               : r = +0.166
+  best_atr vs qqq_realized_vol_pct  : r = -0.653
+  best_atr vs avg_atr_pct           : r = -0.687
+
+相关性排序（绝对值从高到低）:
+  avg_atr_pct           : r=-0.687  (中等)
+  qqq_realized_vol_pct  : r=-0.653  (中等)
+  avg_adx_breadth       : r=-0.218  (弱)
+  qqq_adx               : r=+0.166  (弱)

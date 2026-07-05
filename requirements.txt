@@ -1,0 +1,11 @@
+# kabu — moomoo quantitative trading
+# Install: pip install -r requirements.txt
+
+moomoo-api>=10.4.6408   # moomoo OpenAPI Python SDK
+pandas>=1.5             # data manipulation
+numpy>=1.23             # numerical computation
+backtrader>=1.9.76      # strategy backtesting framework
+matplotlib>=3.6         # chart plotting (used by backtrader)
+requests>=2.28          # DingTalk webhook push notifications
+transformers>=4.30.0    # FinBERT news sentiment model (engine/news.py)
+torch>=2.0.0            # FinBERT inference backend
