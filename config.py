@@ -256,25 +256,46 @@ REPLACEMENT_MARGIN: float = 10.0   # incoming FULL总分必须比被换出的持
 # 边界（6~20区间不生效，27~60区间非单调、无全面占优解）后，改做纯数据分析
 # 找候选变量（analytics/replace_decision_feature_analysis.py），三个候选
 # 里跨周期最稳健的是n_observation_pool_size(负相关)/new_score(正相关)，
-# same_sector分组差异最大。下面三个开关就是这三个候选各自的消融实验
-# 开关，全部默认关闭（None/False，100%复现不加过滤的v2.3行为）——
-# 只有消融回测证明能稳定改善收益/Sharpe/回撤才允许转正，见
-# analytics/replace_ablation_report.py 的验证结论（写在下面注释里，随实验
-# 更新）。
+# same_sector分组差异最大。下面三个开关就是这三个候选各自的消融实验开关。
+#
+# 消融验证结论（analytics/replace_ablation_report.py，8组配置x2个历史
+# 窗口2015-2026/2019-2026，要求两个窗口同时"总收益不低于baseline-5pp+
+# Sharpe不降+MDD不恶化+Replace Alpha均值不降"才算稳定）：
+# pool_size（阶段二相关性最强的候选）消融后两窗口全面变差，彻底否决——
+# 提醒了一次"单变量相关系数高不代表消融后有用"。new_score单独已稳定
+# 通过；new_score+same_sector组合效果最强且两窗口都通过：全历史总收益
+# 251.03%（>baseline 243.49%）、Sharpe 0.926（>baseline 0.876，首次
+# 超过v2.4目标0.90）、MDD-18.20%（>baseline -20.45%，首次跌破v2.4目标
+# 20%以内）、交易数837（落进v2.4目标800~900区间）、Replace Alpha均值
+# 从-0.814%翻转为+1.770%；近期窗口2019-2026同样四项全部达标。用户
+# 2026-07-05拍板采纳这个组合，正式转正为默认值（REPLACEMENT_MAX_
+# OBSERVATION_POOL_SIZE维持None，只有下面两个从关闭状态转正）。
 REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = None    # int|None，非None时：审查时
                                                   # 持有的OBSERVATION仓位数
                                                   # 超过此值直接放弃本次换仓
                                                   # （不筛选victim，是review
                                                   # 级别的整体前置条件）。
-REPLACEMENT_MIN_NEW_SCORE = None                # float|None，非None时：
+                                                  # 消融验证失败，维持关闭。
+REPLACEMENT_MIN_NEW_SCORE = 95.0                # float|None，非None时：
                                                   # incoming信号总分低于此值
-                                                  # 不允许换仓。
-REPLACEMENT_BLOCK_SAME_SECTOR: bool = False      # True时：候选池排除跟
+                                                  # 不允许换仓。2026-07-05
+                                                  # 消融验证通过，转正默认值
+                                                  # （原None，阈值取自生产
+                                                  # margin=10基线121次换仓
+                                                  # new_score分布的25th~50th
+                                                  # 分位折中，非拍脑袋）。
+REPLACEMENT_BLOCK_SAME_SECTOR: bool = True       # True时：候选池排除跟
                                                   # incoming同板块
                                                   # (config.SECTOR_MAP)的
                                                   # OBSERVATION持仓，若排除后
                                                   # 还有其他跨板块候选则继续
                                                   # 换那个，不是整体放弃。
+                                                  # 2026-07-05消融验证通过
+                                                  # （需搭配上面REPLACEMENT_
+                                                  # MIN_NEW_SCORE一起生效，
+                                                  # 单独开启在全历史窗口
+                                                  # 不稳定，组合后才稳定，
+                                                  # 转正默认值（原False）。
 
 # 独立 WEAK_FULL 换仓通道（不依赖下面的v2.4 RSL框架，无cooldown/budget/
 # stability score保护）——当没有OBSERVATION候选可换时，允许换出一个

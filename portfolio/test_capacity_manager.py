@@ -167,23 +167,36 @@ class TestFindWeakFullReplaceablePosition(unittest.TestCase):
 
 
 class TestEvaluateReplacement(unittest.TestCase):
-    """Explain Layer 入口：完整决策记录（含被margin拦截的KEEP）。"""
+    """Explain Layer 入口：完整决策记录（含被margin拦截的KEEP）。这里只
+    测margin/WEAK_FULL逻辑本身，2026-07-05转正的三个消融过滤门
+    （new_score/same_sector/pool_size）显式关掉，不干扰这组既有测试
+    ——那三个门的开/关行为由 TestEvaluateReplacementAblationGates 单独
+    覆盖。"""
 
     def setUp(self):
         self._orig_margin = config.REPLACEMENT_MARGIN
         self._orig_standalone = config.REPLACEMENT_STANDALONE_WEAK_FULL_ENABLED
         self._orig_percentile = config.REPLACEMENT_WEAK_FULL_PERCENTILE
         self._orig_min_history = config.REPLACEMENT_WEAK_FULL_MIN_HISTORY
+        self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
+        self._orig_max_pool = config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE
+        self._orig_block_sector = config.REPLACEMENT_BLOCK_SAME_SECTOR
         config.REPLACEMENT_MARGIN = 10.0
         config.REPLACEMENT_STANDALONE_WEAK_FULL_ENABLED = True
         config.REPLACEMENT_WEAK_FULL_PERCENTILE = 70.0
         config.REPLACEMENT_WEAK_FULL_MIN_HISTORY = 5
+        config.REPLACEMENT_MIN_NEW_SCORE = None
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = False
 
     def tearDown(self):
         config.REPLACEMENT_MARGIN = self._orig_margin
         config.REPLACEMENT_STANDALONE_WEAK_FULL_ENABLED = self._orig_standalone
         config.REPLACEMENT_WEAK_FULL_PERCENTILE = self._orig_percentile
         config.REPLACEMENT_WEAK_FULL_MIN_HISTORY = self._orig_min_history
+        config.REPLACEMENT_MIN_NEW_SCORE = self._orig_min_score
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = self._orig_max_pool
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
 
     def test_no_candidate_at_all(self):
         held = {"US.FULL": {"score_label": LABEL_FULL, "total_score": 95.0, "entry_day_idx": 0}}

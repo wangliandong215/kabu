@@ -85,6 +85,9 @@ class TestActiveReplacementIntegration(unittest.TestCase):
         self._orig_enable = config.ENABLE_ACTIVE_REPLACEMENT
         self._orig_advantage = config.REPLACEMENT_MARGIN
         self._orig_rsl = config.ENABLE_REPLACEMENT_STABILIZATION
+        self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
+        self._orig_block_sector = config.REPLACEMENT_BLOCK_SAME_SECTOR
+        self._orig_max_pool = config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE
         bp.MAX_POSITIONS = 1
         config.ENABLE_ACTIVE_REPLACEMENT = True
         config.REPLACEMENT_MARGIN = 10.0
@@ -92,12 +95,23 @@ class TestActiveReplacementIntegration(unittest.TestCase):
         # （只允许换OBSERVATION）——每个测试按需自行决定是否开启RSL，
         # test_2需要显式关闭，见该测试内的注释。
         config.ENABLE_REPLACEMENT_STABILIZATION = False
+        # 2026-07-05转正的三个消融过滤门这里显式关闭——这个文件用的是
+        # 虚构股票代码（US.OBS/US.FULL等），不在config.SECTOR_MAP里，会
+        # 全部默认落入"other"桶，若不关闭REPLACEMENT_BLOCK_SAME_SECTOR，
+        # 两个虚构代码会被误判成"同板块"而被过滤门拦下，干扰这组测试本来
+        # 要验证的v2.3原始OBSERVATION置换逻辑本身。
+        config.REPLACEMENT_MIN_NEW_SCORE = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = False
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = None
 
     def tearDown(self):
         bp.MAX_POSITIONS = self._orig_max_positions
         config.ENABLE_ACTIVE_REPLACEMENT = self._orig_enable
         config.REPLACEMENT_MARGIN = self._orig_advantage
         config.ENABLE_REPLACEMENT_STABILIZATION = self._orig_rsl
+        config.REPLACEMENT_MIN_NEW_SCORE = self._orig_min_score
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = self._orig_max_pool
 
     def test_1_observation_held_full_signal_triggers_active_replacement(self):
         # Day0: US.OBS gets a weak BUY (strength=0.2 -> total~46.7, OBSERVATION),
