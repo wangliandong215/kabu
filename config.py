@@ -671,6 +671,83 @@ SECTOR_MAP: dict = {
     "US.QQQ": "etf", "US.SPY": "etf",
 }
 
+# ── Chinese display name map (for Telegram/DingTalk trade notifications) ──────
+NAME_MAP: dict = {
+    # Technology
+    "US.AAPL": "苹果", "US.MSFT": "微软", "US.NVDA": "英伟达",
+    "US.AVGO": "博通", "US.AMD": "超微半导体", "US.AMAT": "应用材料",
+    "US.ADI": "亚德诺", "US.MU": "美光科技", "US.LRCX": "泛林集团",
+    "US.KLAC": "科磊", "US.SNPS": "新思科技", "US.CDNS": "铿腾电子",
+    "US.NXPI": "恩智浦", "US.MRVL": "迈威尔科技", "US.ON": "安森美",
+    "US.ASML": "阿斯麦", "US.QCOM": "高通", "US.TXN": "德州仪器",
+    "US.CSCO": "思科",
+    # Software & Cloud
+    "US.ADBE": "奥多比", "US.INTU": "财捷", "US.PANW": "派拓网络",
+    "US.CRWD": "众击", "US.FTNT": "飞塔", "US.ZS": "Zscaler",
+    "US.TEAM": "Atlassian", "US.WDAY": "Workday", "US.DDOG": "Datadog",
+    "US.SNOW": "Snowflake", "US.OKTA": "Okta", "US.VRSK": "Verisk",
+    "US.ADP": "自动数据处理", "US.PAYX": "Paychex",
+    # Internet & E-Commerce
+    "US.AMZN": "亚马逊", "US.META": "Meta", "US.GOOGL": "谷歌A",
+    "US.GOOG": "谷歌C", "US.NFLX": "奈飞", "US.TSLA": "特斯拉",
+    "US.BKNG": "缤客", "US.MELI": "美客多", "US.ABNB": "爱彼迎",
+    "US.TTWO": "Take-Two互动娱乐", "US.EA": "艺电", "US.TTD": "The Trade Desk",
+    "US.PDD": "拼多多",
+    # AI & Emerging Tech
+    "US.PLTR": "帕兰提尔", "US.APP": "AppLovin", "US.ARM": "ARM控股",
+    # Biotech & Healthcare
+    "US.AMGN": "安进", "US.GILD": "吉利德科学", "US.VRTX": "福泰制药",
+    "US.REGN": "再生元", "US.ISRG": "直觉外科", "US.IDXX": "IDEXX实验室",
+    "US.DXCM": "德康医疗", "US.ALGN": "爱齐科技", "US.GEHC": "GE医疗",
+    # Consumer
+    "US.COST": "好市多", "US.SBUX": "星巴克", "US.MDLZ": "亿滋国际",
+    "US.PEP": "百事可乐", "US.MNST": "怪兽饮料", "US.ORLY": "奥莱利汽车",
+    "US.ROST": "罗斯百货", "US.KDP": "胡椒博士",
+    # Telecom & Media
+    "US.TMUS": "T-Mobile美国", "US.CMCSA": "康卡斯特",
+    # Industrials & Energy
+    "US.HON": "霍尼韦尔", "US.PCAR": "帕卡", "US.FAST": "快扣",
+    "US.CPRT": "Copart", "US.CTAS": "信达思", "US.BKR": "贝克休斯",
+    "US.FANG": "钻石背能源", "US.LIN": "林德集团",
+    # Utilities
+    "US.CEG": "星座能源", "US.EXC": "爱克斯龙",
+    "US.AEP": "美国电力", "US.XEL": "埃克赛尔能源",
+    # ETF
+    "US.QQQ": "纳斯达克100ETF", "US.SPY": "标普500ETF",
+    # 半导体 & 电子设备 (Japan)
+    "JP.8035": "东京电子", "JP.285A": "铠侠", "JP.6146": "迪斯科",
+    "JP.6920": "Lasertec", "JP.6857": "爱德万测试", "JP.4063": "信越化学",
+    "JP.3436": "胜高", "JP.6723": "瑞萨电子", "JP.6963": "罗姆半导体",
+    "JP.4062": "揖斐电", "JP.5214": "日本电气硝子", "JP.6981": "村田制作所",
+    "JP.6976": "太阳诱电", "JP.6762": "TDK", "JP.6971": "京瓷",
+    # 消费电子 & 精密仪器 (Japan)
+    "JP.6758": "索尼集团", "JP.7731": "尼康", "JP.7751": "佳能",
+    "JP.6752": "松下控股", "JP.6753": "夏普", "JP.6861": "基恩士",
+    "JP.6954": "发那科", "JP.6645": "欧姆龙",
+    # 综合电机 & IT (Japan)
+    "JP.6702": "富士通", "JP.6501": "日立", "JP.6503": "三菱电机",
+    "JP.6701": "NEC", "JP.6594": "日本电产", "JP.9984": "软银集团",
+    # 汽车 & 零部件 (Japan)
+    "JP.6902": "电装", "JP.7270": "斯巴鲁", "JP.7267": "本田技研工业",
+    "JP.7201": "日产汽车",
+    # 金融 (Japan)
+    "JP.8411": "瑞穗金融集团", "JP.8316": "三井住友金融集团",
+    "JP.8306": "三菱UFJ金融集团",
+    # 综合商社 (Japan)
+    "JP.8058": "三菱商事", "JP.8031": "三井物产", "JP.8053": "住友商事",
+    "JP.8002": "丸红", "JP.8001": "伊藤忠商事",
+    # 制药 & 消费 (Japan)
+    "JP.4568": "第一三共", "JP.4502": "武田药品", "JP.4519": "中外制药",
+    "JP.4503": "安斯泰来制药", "JP.4911": "资生堂", "JP.9983": "迅销(优衣库)",
+    # 航运 (Japan)
+    "JP.9101": "日本邮船", "JP.9104": "商船三井", "JP.9107": "川崎汽船",
+    # 台湾 / 韩国 ADR
+    "US.TSM": "台积电", "US.UMC": "联电", "US.ASX": "日月光投控",
+    "US.CPNG": "酷澎", "US.PKX": "浦项制铁", "US.KB": "KB金融集团",
+    "US.SHG": "新韩金融集团", "US.WF": "我们金融集团", "US.KEP": "韩国电力",
+    "US.LPL": "LG显示",
+}
+
 # ── QQQ 大盘 Beta 动态垫底（2026-07-03 改造，按用户PRD）───────────────────────
 # 固定划出 QQQ_CORE_TARGET_PCT（20%~30%区间，默认25%）长期持有 QQQ，是"死仓"
 # 不是"资金不足时的兜底填充"——不再因为个股信号出现就卖出腾资金（旧版本会,
@@ -690,3 +767,7 @@ CACHE_TTL_INTRADAY: int = 300        # 5 min for 1m–60m bars
 # ── Notifications ─────────────────────────────────────────────────────────────
 # Set env var KABU_DINGTALK_WEBHOOK to receive DingTalk alerts.
 DINGTALK_WEBHOOK: str = os.getenv("KABU_DINGTALK_WEBHOOK", "")
+
+# Set env vars KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID to receive Telegram alerts.
+TELEGRAM_BOT_TOKEN: str = os.getenv("KABU_TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID:   str = os.getenv("KABU_TELEGRAM_CHAT_ID", "")

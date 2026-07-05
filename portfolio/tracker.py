@@ -93,6 +93,13 @@ class Portfolio:
     def position_count(self) -> int:
         return len(self.data["positions"])
 
+    def next_trade_id(self) -> int:
+        """Monotonically increasing trade counter, persisted alongside positions."""
+        seq = self.data.get("trade_seq", 0) + 1
+        self.data["trade_seq"] = seq
+        self._save()
+        return seq
+
     def open_position(self, code: str, side: str,
                       entry_price: float, qty: int,
                       signal_strength: float = 0.5,

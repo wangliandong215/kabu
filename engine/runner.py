@@ -123,12 +123,21 @@ def run_once(
             if not _qqq_above_ma():
                 alert.warn(f"runner: QQQ core exit — broke below "
                            f"MA{config.QQQ_MA_PERIOD}  now={price:.2f}")
-                _place_order(
+                order_id = _place_order(
                     code=code, side="SELL", qty=pos["qty"], price=price,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                 )
-                if confirmed:
-                    portfolio.close_position(code, price, reason="MA200_BREAK")
+                if confirmed and order_id:
+                    closed = portfolio.close_position(code, price, reason="MA200_BREAK")
+                    alert.trade_sell(
+                        code, closed["avg_cost"], price, closed["qty"],
+                        days_held=_days_held(closed.get("entry_time")),
+                        reason="MA200_BREAK",
+                        cash_available=portfolio.available_cash(),
+                        total_equity=portfolio.current_equity(),
+                        position_count=portfolio.position_count(),
+                        trade_id=portfolio.next_trade_id(), env=env_label,
+                    )
             continue   # 跳过下面的普通持仓退出逻辑
 
         # Gather the SELL/HOLD signal from the strategy that opened this position.
@@ -160,7 +169,7 @@ def run_once(
             alert.warn(f"runner: exit triggered  {code}  reason={reason}"
                        f"  strategy={entry_strat}"
                        f"  entry={pos['entry_price']:.4f}  now={price:.4f}")
-            _place_order(
+            order_id = _place_order(
                 code=code,
                 side="SELL",
                 qty=pos["qty"],
@@ -169,8 +178,17 @@ def run_once(
                 env_label=env_label,
                 confirmed=confirmed,
             )
-            if confirmed:
-                portfolio.close_position(code, price, reason=reason)
+            if confirmed and order_id:
+                closed = portfolio.close_position(code, price, reason=reason)
+                alert.trade_sell(
+                    code, closed["avg_cost"], price, closed["qty"],
+                    days_held=_days_held(closed.get("entry_time")),
+                    reason=reason,
+                    cash_available=portfolio.available_cash(),
+                    total_equity=portfolio.current_equity(),
+                    position_count=portfolio.position_count(),
+                    trade_id=portfolio.next_trade_id(), env=env_label,
+                )
 
     # ── Macro news circuit breaker (checked once per pass) ───────────────────
     macro_block = news_sentiment.macro_circuit_breaker()
@@ -272,6 +290,16 @@ def run_once(
             if confirmed and order_id:
                 portfolio.add_to_position(code, price, add_qty, strength,
                                           strategy="atr_breakout")
+                alert.trade_buy(
+                    code, price, add_qty,
+                    sector=config.SECTOR_MAP.get(code, "other"),
+                    score=pos.get("total_score"), score_label=pos.get("score_label"),
+                    stop_price=pos.get("trail_stop"),
+                    position_pct=(pos["avg_cost"] * pos["qty"]) / portfolio.total_capital(),
+                    cash_available=portfolio.available_cash(),
+                    position_count=portfolio.position_count(),
+                    trade_id=portfolio.next_trade_id(), env=env_label,
+                )
 
     # ── 2b. Pyramid scale-in for existing positions ───────────────────────────
     if config.PYRAMID_ENABLED:
@@ -320,6 +348,16 @@ def run_once(
             )
             if confirmed and order_id:
                 portfolio.add_to_position(code, price, add_qty, new_str)
+                alert.trade_buy(
+                    code, price, add_qty,
+                    sector=config.SECTOR_MAP.get(code, "other"),
+                    score=pos.get("total_score"), score_label=pos.get("score_label"),
+                    stop_price=pos.get("trail_stop"),
+                    position_pct=(pos["avg_cost"] * pos["qty"]) / portfolio.total_capital(),
+                    cash_available=portfolio.available_cash(),
+                    position_count=portfolio.position_count(),
+                    trade_id=portfolio.next_trade_id(), env=env_label,
+                )
 
     # ── 2c. Open new positions — ranked by signal strength ────────────────────
     buy_signals = rank_signals(results, signal="BUY")
@@ -476,6 +514,16 @@ def run_once(
             portfolio.open_position(code, "BUY", price, qty, strength, entry_strategy,
                                     entry_atr=result.get("atr", 0.0),
                                     score_label=total.label, total_score=total.total)
+            alert.trade_buy(
+                code, price, qty,
+                sector=config.SECTOR_MAP.get(code, "other"),
+                score=total.total, score_label=total.label,
+                stop_price=portfolio.get_position(code).get("trail_stop"),
+                position_pct=(price * qty) / portfolio.total_capital(),
+                cash_available=portfolio.available_cash(),
+                position_count=portfolio.position_count(),
+                trade_id=portfolio.next_trade_id(), env=env_label,
+            )
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，只要不在持有中且 QQQ>MA200 就买回 ──
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
@@ -502,6 +550,15 @@ def run_once(
                         portfolio.open_position(
                             config.QQQ_CORE_CODE, "BUY", qqq_price, qty,
                             signal_strength=1.0, strategy="core_etf",
+                        )
+                        alert.trade_buy(
+                            config.QQQ_CORE_CODE, qqq_price, qty,
+                            sector="etf", score=None, score_label="CORE_ETF",
+                            stop_price=None,
+                            position_pct=(qqq_price * qty) / portfolio.total_capital(),
+                            cash_available=portfolio.available_cash(),
+                            position_count=portfolio.position_count(),
+                            trade_id=portfolio.next_trade_id(), env=env_label,
                         )
         else:
             alert.info(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
@@ -577,6 +634,17 @@ def _day_ordinal(entry_time_iso) -> int:
     return datetime.now().toordinal()
 
 
+def _days_held(entry_time_iso) -> int:
+    """Calendar days between entry_time (ISO string) and now, for the SELL
+    notification's "持仓天数" field. Falls back to 0 if unparseable."""
+    if entry_time_iso:
+        try:
+            return (datetime.now() - datetime.fromisoformat(entry_time_iso)).days
+        except (ValueError, TypeError):
+            pass
+    return 0
+
+
 def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incoming_score: float,
                                 trd_env, env_label: str, confirmed: bool,
                                 results: dict) -> Optional[str]:
@@ -637,8 +705,17 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
         alert.error(f"runner: ACTIVE_REPLACEMENT sell failed for {victim_code} "
                     f"— aborting swap, position left untouched")
         return None
-    if confirmed:
-        portfolio.close_position(victim_code, victim_price, reason="ACTIVE_REPLACEMENT")
+    if confirmed and order_id:
+        closed = portfolio.close_position(victim_code, victim_price, reason="ACTIVE_REPLACEMENT")
+        alert.trade_sell(
+            victim_code, closed["avg_cost"], victim_price, closed["qty"],
+            days_held=_days_held(closed.get("entry_time")),
+            reason="ACTIVE_REPLACEMENT",
+            cash_available=portfolio.available_cash(),
+            total_equity=portfolio.current_equity(),
+            position_count=portfolio.position_count(),
+            trade_id=portfolio.next_trade_id(), env=env_label,
+        )
     return victim_code
 
 
@@ -683,7 +760,6 @@ def _place_order(
         )
         if ret == ft.RET_OK:
             order_id = str(data["order_id"].iloc[0])
-            alert.signal(code, side, price, qty, order_id=order_id, env=env_label)
         else:
             alert.error(f"_place_order: {code} {side} failed — {data}")
     except Exception as exc:
