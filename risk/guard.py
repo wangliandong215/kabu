@@ -98,6 +98,24 @@ def check_exit_ordered(
     return ""
 
 
+def breakeven_lock_floor(entry: float, entry_atr: float, current_price: float,
+                          was_locked: bool) -> tuple:
+    """
+    单一职责：判断保本止损锁是否应该触发/维持，返回 (是否锁定, 止损地板价)。
+    一旦价格清出 1×entry_ATR 的浮盈就永久锁定（只会锁上，不会解锁），地板
+    价固定在成本价——`update_trailing_stop()`（实盘/模拟盘）和
+    `backtest_portfolio.py`（回测）都调用这一个函数做判断，2026-07-06
+    之前backtest那份是完全没有实现这段逻辑（不是数值凑巧一致，是真的
+    缺失），修复时收敛成这一处共享实现，避免以后又出现"两边各写一次，
+    改一边忘了改另一边"的漂移。
+
+    返回的 floor 在 was_locked=False 且未触发时是 None（调用方不应该用它
+    去限制trail），触发/已锁定时是 entry（成本价）。
+    """
+    locked = was_locked or current_price > entry + config.ATR_BREAKEVEN_TRIGGER * entry_atr
+    return locked, (entry if locked else None)
+
+
 def update_trailing_stop(pos: dict, current_price: float, current_atr: float) -> None:
     """
     Advance the ATR trailing stop in-place for a trend-following position.
@@ -123,9 +141,7 @@ def update_trailing_stop(pos: dict, current_price: float, current_atr: float) ->
     elif float_pct >= 0.20 and atr_mult > config.ATR_MULT_MID:
         atr_mult = config.ATR_MULT_MID
 
-    # Lock stop at breakeven when price cleared 1×entry_ATR above cost
-    if not be_locked and current_price > entry + config.ATR_BREAKEVEN_TRIGGER * entry_atr:
-        be_locked = True
+    be_locked, floor = breakeven_lock_floor(entry, entry_atr, current_price, be_locked)
 
     # Advance trailing stop (only moves up)
     new_trail = current_price - atr_mult * current_atr
@@ -137,8 +153,8 @@ def update_trailing_stop(pos: dict, current_price: float, current_atr: float) ->
     if old_trail is None:
         old_trail = entry - config.ATR_MULT_BASE * entry_atr
     trail     = max(old_trail, new_trail)
-    if be_locked:
-        trail = max(trail, entry)   # breakeven floor
+    if floor is not None:
+        trail = max(trail, floor)
 
     pos["atr_mult"]         = atr_mult
     pos["breakeven_locked"] = be_locked

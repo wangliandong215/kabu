@@ -434,19 +434,36 @@ TAKE_PROFIT_TREND: float = None   # atr_breakout / ema_rsi: no cap, ATR trail ex
 MIN_ENTRY_STRENGTH: float = 0.0   # 不过滤，动态仓位自动区分强弱信号
 
 # ── ATR 跟踪止损 ──────────────────────────────────────────────────────────────
-# 2026-07-04 锁定为 5.5×ATR（原 4.0）——固定ATR全历史梯度对比
+# 2026-07-04 曾锁定为 5.5×ATR（原 4.0）——固定ATR全历史梯度对比
 # （2015-01-01~2026-07-03，142只股票池，见 _atr_fixed_comparison.py /
 # _atr_fixed_comparison_result.csv）在 {4.0,5.0,5.5,6.0,6.5} 五个点里，5.5
-# 是干净的单点最优（peak），不是宽平台：总收益163.09%→277.18%，Sharpe
-# 0.758→0.920，Calmar 0.373→0.617，最大回撤 -23.54%→-19.85%，交易笔数
-# 1067→873。6.0/6.5 两侧明显更差（Sharpe跌到0.70/0.69，回撤重新放大到
-# -23.8%/-24.2%，比4.0基准还差），确认止损放太宽会反向恶化，5.5不是
-# "越宽越好"里的任意一点。此前还测试过反比例波动率动态ATR方案（42折
-# IS/OOS walk-forward），全期跑输固定5.5，已否决且不会重新捡起
-# （见 engine/regime.py 的 REJECTED 2026-07-04 记录）。
-ATR_MULT_BASE:   float = 5.5   # 趋势策略跟踪止损距离：entry - 5.5×ATR
-ATR_MULT_MID:    float = 5.5   # 保持不变（不再分档收紧）
-ATR_MULT_TIGHT:  float = 5.5
+# 曾是干净的单点最优（peak）。**这次验证是在没有保本止损锁的假设下做的**
+# ——backtest_portfolio.py当时完全没实现下面的ATR_BREAKEVEN_TRIGGER逻辑，
+# 只在实盘/模拟盘（risk/guard.py::update_trailing_stop()）里生效，是一处
+# 真实的行为漂移，不是数值巧合掩盖，2026-07-06做v2.4 Replace决策SSoT审计
+# 时才发现。
+#
+# 2026-07-06修复：backtest_portfolio.py补上保本锁（共享
+# risk/guard.py::breakeven_lock_floor()，见该文件的注释），82只池全历史
+# （v2.4当前配置：REPLACEMENT_MIN_NEW_SCORE=95+REPLACEMENT_BLOCK_SAME_
+# SECTOR=True）在旧值5.5下从251.03%/Sharpe0.926/-18.20%/837笔暴跌到
+# 180.49%/Sharpe0.762/-21.60%/1318笔——证明5.5这个值是在错误的止损模型
+# 下选出来的，保本锁生效后需要重新扫描。重新扫描
+# （_atr_resweep_with_breakeven.py，{3.0~10.0}十二点+{11,12,14,16,20,25}
+# 六点补充网格）发现随着ATR变宽整体呈上升趋势但明显非单调（路径依赖），
+# 且ATR>=16之后交易数不再随ATR增大而明显下降（850~950笔区间打平），说明
+# 那个区间ATR跟踪止损已经名存实亡（几乎不会被触发，退出主要靠硬止损/
+# 保本锁/策略信号），继续追更高的数字（比如ATR=25时总收益436.71%）大概率
+# 是在拟合这一条历史路径的巧合，不是真的止损设计更优。用户拍板选择
+# **ATR=14.0**——该区间仍在"止损机制还有意义"的范围内，且是局部Sharpe/
+# MDD/Calmar三项都最优的点：总收益353.08%，Sharpe0.995，MDD-16.39%
+# （历史上第一次同时满足v2.4最初PRD设的Sharpe>=0.90和MDD<=20%两项目标），
+# Calmar0.857，交易954笔。backtest_portfolio.py::ATR_TRAIL_MULT必须跟这里
+# 保持同步（两处目前是独立的硬编码值，SSoT审计已记录为已知问题，尚未
+# 合并成一处，改一边记得改另一边）。
+ATR_MULT_BASE:   float = 14.0   # 趋势策略跟踪止损距离：entry - 14.0×ATR
+ATR_MULT_MID:    float = 14.0   # 保持不变（不再分档收紧）
+ATR_MULT_TIGHT:  float = 14.0
 ATR_BREAKEVEN_TRIGGER: float = 1.0  # 价格 > 入场价 + 1×ATR 时止损上移至成本价
 
 # ── Time-frame note ──────────────────────────────────────────────────────────

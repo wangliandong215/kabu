@@ -61,6 +61,7 @@ from engine.regime import market_volatility_percentile as _market_volatility_per
 from engine.market_weather import market_weather_series as _market_weather_series
 from portfolio import capacity_manager
 from portfolio import replacement_stabilizer as rsl
+from risk import guard
 from risk.sizing import rsi_multiplier
 from strategies.boll import BollStrategy
 
@@ -105,10 +106,16 @@ DYNAMIC_MAX_OPEN     = 3           # ≤3 只活跃仓位时触发动态扩仓
 STOP_MAX   = {0.7: 0.10, 0.4: 0.12}
 
 COMMISSION  = 0.001
-ATR_TRAIL_MULT  = 5.5   # 趋势策略跟踪止损距离 — 2026-07-04 从 4.0 上调锁定为
-                        # 5.5，全历史{4.0,5.0,5.5,6.0,6.5}梯度对比中的单点
-                        # 最优（见 config.py ATR_MULT_BASE 同一条记录、
-                        # _atr_fixed_comparison.py）
+ATR_TRAIL_MULT  = 14.0  # 趋势策略跟踪止损距离 — 2026-07-06从5.5上调锁定为
+                        # 14.0：SSoT审计发现本文件此前完全没实现保本止损锁
+                        # （已修复，见下面4a退出检查段落的
+                        # guard.breakeven_lock_floor()调用），补上后旧值5.5
+                        # 全面变差，重新扫描后选定14.0——完整依据见
+                        # config.py::ATR_MULT_BASE 同一条记录 +
+                        # _atr_resweep_with_breakeven.py。**必须跟
+                        # config.ATR_MULT_BASE/MID/TIGHT保持同步**（两处
+                        # 目前是独立硬编码值，尚未合并成一处，改一边记得
+                        # 改另一边——这是SSoT审计记录的已知问题之一）。
 
 # ── QQQ 大盘 Beta 动态垫底参数（与 config.QQQ_CORE_TARGET_PCT/QQQ_MA_PERIOD 同步）─
 QQQ_CODE = "US.QQQ"
@@ -664,7 +671,22 @@ def simulate_from_prepared(prepared: dict, cash: float,
                 if not np.isnan(atr_now) and atr_now > 0:
                     new_trail = clo - cur_atr_mult * atr_now
                     old_trail = pos.get("trail_stop", ep - cur_atr_mult * pos.get("entry_atr", atr_now))
-                    pos["trail_stop"] = max(old_trail, new_trail)
+                    trail_candidate = max(old_trail, new_trail)
+                    # 2026-07-06修复：保本止损锁——SSoT审计发现之前这里完全
+                    # 没实现（不是数值巧合掩盖，是真的缺失），跟
+                    # risk/guard.py::update_trailing_stop()（实盘/模拟盘用）
+                    # 行为不一致。共享同一个判断函数guard.breakeven_lock_
+                    # floor()，避免以后两边各写一次又漂移；ATR棘轮本身
+                    # （这里是全局cur_atr_mult，实盘是per-position按浮盈%
+                    # 分档）暂不在本次修复范围内，按用户决定保留独立实现，
+                    # 已记入memory的已知问题清单。
+                    be_locked, floor = guard.breakeven_lock_floor(
+                        ep, pos.get("entry_atr", atr_now), clo,
+                        pos.get("breakeven_locked", False))
+                    pos["breakeven_locked"] = be_locked
+                    if floor is not None:
+                        trail_candidate = max(trail_candidate, floor)
+                    pos["trail_stop"] = trail_candidate
 
                 trail = pos.get("trail_stop")
                 if not reason and trail and low <= trail:
@@ -1188,6 +1210,7 @@ def simulate_from_prepared(prepared: dict, cash: float,
                 "highest_close":   price,
                 "entry_atr":       atr_val,
                 "trail_stop":      trail,
+                "breakeven_locked": False,   # 2026-07-06新增，配合guard.breakeven_lock_floor()
                 "score_label":     cand["score_label"],   # analytics-only
                 "total_score":     cand["total_score"],   # analytics-only + v2.3 capacity manager input
             }
