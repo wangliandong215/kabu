@@ -209,17 +209,6 @@ WATCHLIST_ASIA_PACIFIC: list = [
     "JP.9104",  # 商船三井 MOL
     "JP.9107",  # 川崎汽船 K Line
 
-    # 台湾 / 韩国 — ADR 或美股直接上市（本地代码 moomoo 不支持，见上方说明）
-    "US.TSM",   # 台积电 ADR
-    "US.UMC",   # 联电 ADR
-    "US.ASX",   # 日月光投控 ADR
-    "US.CPNG",  # 酷澎（直接美股上市，非ADR）
-    "US.PKX",   # 浦项制铁 ADR
-    "US.KB",    # KB金融集团 ADR
-    "US.SHG",   # 新韩金融集团 ADR
-    "US.WF",    # 我们金融集团 ADR
-    "US.KEP",   # 韩国电力 ADR
-    "US.LPL",   # LG显示(LG Display) ADR
 ]
 
 WATCHLIST: list = WATCHLIST_EUROPE_US + WATCHLIST_ASIA_PACIFIC
@@ -741,11 +730,6 @@ NAME_MAP: dict = {
     "JP.4503": "安斯泰来制药", "JP.4911": "资生堂", "JP.9983": "迅销(优衣库)",
     # 航运 (Japan)
     "JP.9101": "日本邮船", "JP.9104": "商船三井", "JP.9107": "川崎汽船",
-    # 台湾 / 韩国 ADR
-    "US.TSM": "台积电", "US.UMC": "联电", "US.ASX": "日月光投控",
-    "US.CPNG": "酷澎", "US.PKX": "浦项制铁", "US.KB": "KB金融集团",
-    "US.SHG": "新韩金融集团", "US.WF": "我们金融集团", "US.KEP": "韩国电力",
-    "US.LPL": "LG显示",
 }
 
 # ── QQQ 大盘 Beta 动态垫底（2026-07-03 改造，按用户PRD）───────────────────────
