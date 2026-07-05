@@ -17,13 +17,27 @@ from portfolio.capacity_manager import (
 
 
 class TestFindReplaceablePosition(unittest.TestCase):
+    """2026-07-06起 find_replaceable_position() 是 evaluate_replacement()
+    的薄封装（见capacity_manager.py），这里只测纯margin/排序行为，跟
+    TestEvaluateReplacement一样显式关闭三个消融过滤门，不让它们干扰——
+    这组测试用的US.OBS等代码不在SECTOR_MAP里会一起落进"other"桶，且
+    不传incoming_code时同样默认"other"，不关闭same_sector门会被误判。"""
 
     def setUp(self):
         self._orig_advantage = config.REPLACEMENT_MARGIN
+        self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
+        self._orig_max_pool = config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE
+        self._orig_block_sector = config.REPLACEMENT_BLOCK_SAME_SECTOR
         config.REPLACEMENT_MARGIN = 10.0
+        config.REPLACEMENT_MIN_NEW_SCORE = None
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = False
 
     def tearDown(self):
         config.REPLACEMENT_MARGIN = self._orig_advantage
+        config.REPLACEMENT_MIN_NEW_SCORE = self._orig_min_score
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = self._orig_max_pool
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
 
     # ── PRD Test 1 类比：存在一个OBSERVATION，分数优势足够 -> 应该被换出 ──────
 

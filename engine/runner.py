@@ -27,7 +27,7 @@ from engine import regime
 from engine import market_weather
 from engine.market_hours import filter_open
 from risk.earnings import is_earnings_blackout
-from portfolio.capacity_manager import find_replaceable_position
+from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
 from risk import guard, sizing
 
@@ -387,15 +387,16 @@ def run_once(
         if total.label == scoring.LABEL_SKIP:
             continue   # 总分<40，或天气state0（已在上面macro_block短路，这里是双保险）
         if not guard.can_open_position(portfolio):
-            # ── v2.3 Portfolio Capacity Manager（主动置换）────────────────
+            # ── v2.3/v2.4 Portfolio Capacity Manager（主动置换）────────────
             # 名额已满时，只有新信号是FULL才尝试换出一个OBSERVATION持仓
-            # 腾出名额，而不是直接放弃——跟backtest_portfolio.py共用同一套
-            # portfolio.capacity_manager判断逻辑。找不到victim就维持原有
-            # 行为（break）。
+            # 腾出名额，而不是直接放弃——跟backtest_portfolio.py共用同一个
+            # portfolio.capacity_manager.evaluate_replacement()判断入口
+            # （Single Source of Truth，2026-07-06统一，见该函数docstring）。
+            # 找不到victim就维持原有行为（break）。
             victim_code = None
             if config.ENABLE_ACTIVE_REPLACEMENT and total.label == scoring.LABEL_FULL:
                 victim_code = _attempt_active_replacement(
-                    portfolio, incoming_score=total.total,
+                    portfolio, incoming_code=code, incoming_score=total.total,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                     results=results,
                 )
@@ -563,7 +564,7 @@ def _qqq_above_ma() -> bool:
 
 def _day_ordinal(entry_time_iso) -> int:
     """把 entry_time（ISO字符串）换算成可比较的整数序数，供
-    portfolio.capacity_manager.find_replaceable_position() 的
+    portfolio.capacity_manager.evaluate_replacement() 的
     current_day_idx 参数使用——只用于多个OBSERVATION候选打平时按持仓时长
     排序（tie-break），不影响主判断，用日历日代替回测里的交易日不影响
     正确性。解析失败/缺失时退化为"今天"（等价于holding_days=0，不会被
@@ -576,18 +577,28 @@ def _day_ordinal(entry_time_iso) -> int:
     return datetime.now().toordinal()
 
 
-def _attempt_active_replacement(portfolio: Portfolio, incoming_score: float,
+def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incoming_score: float,
                                 trd_env, env_label: str, confirmed: bool,
                                 results: dict) -> Optional[str]:
-    """v2.3 Portfolio Capacity Manager 移植进实盘：MAX_POSITIONS已满时，
-    尝试找一个可换出的OBSERVATION持仓、真正执行SELL，为新的FULL信号腾出
-    名额。判断逻辑跟backtest_portfolio.py共用同一个
-    portfolio.capacity_manager.find_replaceable_position()，不重新实现。
+    """v2.3/v2.4 Portfolio Capacity Manager 移植进实盘：MAX_POSITIONS已满
+    时，尝试找一个可换出的持仓、真正执行SELL，为新的FULL信号腾出名额。
+    判断逻辑调用 portfolio.capacity_manager.evaluate_replacement()——跟
+    backtest_portfolio.py非RSL分支用的是**同一个函数**，不是重新实现或
+    复制的一份规则，REPLACEMENT_MARGIN/REPLACEMENT_MIN_NEW_SCORE/
+    REPLACEMENT_BLOCK_SAME_SECTOR 三个配置在回测/模拟盘/实盘（后两者都
+    走这条 runner.py 路径，只是 trd_env 不同）三条路径下行为完全一致
+    （由 engine/test_runner_replacement.py 的跨路径一致性测试保证）。
+
+    已知的一处不完整对齐：本函数不传 full_score_history（runner.py 未
+    维护滚动FULL分数历史），所以WEAK_FULL独立通道（config.
+    REPLACEMENT_STANDALONE_WEAK_FULL_ENABLED）即使打开也不会在这里触发
+    ——该开关当前默认False，不影响现行为；如果以后要把这个开关也打开到
+    实盘，需要先给runner.py补上历史追踪再移除这个限制。
 
     返回被换出的code表示置换成立（调用方应紧接着往下走已有的敞口/板块/
     sizing/BUY逻辑，就像这个名额本来就空着一样）；返回None表示没有可换的
-    victim（不存在OBSERVATION持仓，或分数优势不够），调用方应回退到原有
-    的"容量已满，放弃开仓"行为（break）。
+    victim（不存在合格候选、分数优势不够，或被三个消融过滤门拦截），
+    调用方应回退到原有的"容量已满，放弃开仓"行为（break）。
 
     跟现有退出循环的SELL不同：这里的SELL用BUY侧那种更严格的**order_id
     成功与否**门控是否调用close_position——SELL静默失败时不会把本地
@@ -602,11 +613,12 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_score: float,
         c: {**p, "entry_day_idx": _day_ordinal(p.get("entry_time"))}
         for c, p in held.items()
     }
-    victim_code = find_replaceable_position(
-        incoming_score=incoming_score, held_positions=held_for_review,
-        current_day_idx=today_ord)
-    if victim_code is None:
+    evaluation = capacity_manager.evaluate_replacement(
+        incoming_code=incoming_code, incoming_score=incoming_score,
+        held_positions=held_for_review, current_day_idx=today_ord)
+    if evaluation.decision != "REPLACE":
         return None
+    victim_code = evaluation.victim_code
 
     victim_pos = held[victim_code]
     victim_price = results.get(victim_code, {}).get("current_price") or get_price(victim_code)

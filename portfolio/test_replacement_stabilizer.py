@@ -30,6 +30,13 @@ class TestReplacementStabilizer(unittest.TestCase):
             "REPLACEMENT_WEAK_FULL_ENABLED":           config.REPLACEMENT_WEAK_FULL_ENABLED,
             "REPLACEMENT_OBSERVATION_TIER_ENABLED":    config.REPLACEMENT_OBSERVATION_TIER_ENABLED,
             "REPLACEMENT_LOW_PARTIAL_TIER_ENABLED":    config.REPLACEMENT_LOW_PARTIAL_TIER_ENABLED,
+            # 2026-07-06: find_replaceable_position()（Tier1用）现在是
+            # evaluate_replacement()的薄封装，会经过v2.4阶段三转正的这三个
+            # 消融过滤门——这里显式关闭，这组RSL测试用的是虚构代码，不该被
+            # 生产环境的new_score/same_sector默认值干扰。
+            "REPLACEMENT_MIN_NEW_SCORE":               config.REPLACEMENT_MIN_NEW_SCORE,
+            "REPLACEMENT_MAX_OBSERVATION_POOL_SIZE":   config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE,
+            "REPLACEMENT_BLOCK_SAME_SECTOR":           config.REPLACEMENT_BLOCK_SAME_SECTOR,
         }
         config.REPLACEMENT_MARGIN              = 10.0
         config.REPLACEMENT_BUDGET_PER_100_DAYS         = 15
@@ -44,6 +51,9 @@ class TestReplacementStabilizer(unittest.TestCase):
         config.REPLACEMENT_WEAK_FULL_ENABLED            = True
         config.REPLACEMENT_OBSERVATION_TIER_ENABLED     = True
         config.REPLACEMENT_LOW_PARTIAL_TIER_ENABLED     = True
+        config.REPLACEMENT_MIN_NEW_SCORE                = None
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE    = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR            = False
 
     def tearDown(self):
         for k, v in self._orig.items():
@@ -414,12 +424,18 @@ class TestExplainJSON(unittest.TestCase):
             "REPLACEMENT_NEW_TIER_BUDGET_PER_100_DAYS": config.REPLACEMENT_NEW_TIER_BUDGET_PER_100_DAYS,
             "REPLACEMENT_LOW_PARTIAL_THRESHOLD":       config.REPLACEMENT_LOW_PARTIAL_THRESHOLD,
             "REPLACEMENT_WEAK_FULL_MIN_HISTORY":       config.REPLACEMENT_WEAK_FULL_MIN_HISTORY,
+            "REPLACEMENT_MIN_NEW_SCORE":               config.REPLACEMENT_MIN_NEW_SCORE,
+            "REPLACEMENT_MAX_OBSERVATION_POOL_SIZE":   config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE,
+            "REPLACEMENT_BLOCK_SAME_SECTOR":           config.REPLACEMENT_BLOCK_SAME_SECTOR,
         }
         config.REPLACEMENT_MARGIN               = 10.0
         config.REPLACEMENT_BUDGET_PER_100_DAYS          = 15
         config.REPLACEMENT_NEW_TIER_BUDGET_PER_100_DAYS = 8
         config.REPLACEMENT_LOW_PARTIAL_THRESHOLD        = 70.0
         config.REPLACEMENT_WEAK_FULL_MIN_HISTORY        = 20
+        config.REPLACEMENT_MIN_NEW_SCORE                = None
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE    = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR            = False
 
     def tearDown(self):
         for k, v in self._orig.items():

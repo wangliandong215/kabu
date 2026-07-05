@@ -84,11 +84,20 @@ class TestReplacementStabilizerIntegration(unittest.TestCase):
         self._orig_rsl = config.ENABLE_REPLACEMENT_STABILIZATION
         self._orig_low_partial = config.REPLACEMENT_LOW_PARTIAL_THRESHOLD
         self._orig_budget = config.REPLACEMENT_BUDGET_PER_100_DAYS
+        self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
+        self._orig_max_pool = config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE
+        self._orig_block_sector = config.REPLACEMENT_BLOCK_SAME_SECTOR
         bp.MAX_POSITIONS = 1
         config.ENABLE_ACTIVE_REPLACEMENT = True
         config.REPLACEMENT_MARGIN = 10.0
         config.ENABLE_REPLACEMENT_STABILIZATION = True
         config.REPLACEMENT_LOW_PARTIAL_THRESHOLD = 70.0
+        # 2026-07-06: Tier1现在经由find_replaceable_position()->
+        # evaluate_replacement()，会碰到v2.4阶段三转正的这三个消融门——
+        # 这个文件用虚构代码测RSL本身的行为，跟这次的生产默认值无关，显式关闭。
+        config.REPLACEMENT_MIN_NEW_SCORE = None
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = None
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = False
 
     def tearDown(self):
         bp.MAX_POSITIONS = self._orig_max_positions
@@ -97,6 +106,9 @@ class TestReplacementStabilizerIntegration(unittest.TestCase):
         config.ENABLE_REPLACEMENT_STABILIZATION = self._orig_rsl
         config.REPLACEMENT_LOW_PARTIAL_THRESHOLD = self._orig_low_partial
         config.REPLACEMENT_BUDGET_PER_100_DAYS = self._orig_budget
+        config.REPLACEMENT_MIN_NEW_SCORE = self._orig_min_score
+        config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = self._orig_max_pool
+        config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
 
     def test_low_partial_evicted_when_no_observation_held(self):
         # Day0: US.LP gets a mid BUY (strength=0.5 -> total~66.7, PARTIAL,

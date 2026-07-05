@@ -349,7 +349,13 @@ def decide(incoming_code: str,
     # Tier3同款模式——依然照常判断，只是不采纳，记录would-be victim后落到
     # Tier2/3继续尝试（因为这个名额事实上没被这次审查腾出来）。
     obs_pool = {c: p for c, p in eligible.items() if p.get("score_label") == LABEL_OBSERVATION}
-    victim_code = find_replaceable_position(incoming_score, obs_pool, current_day_idx)
+    # 2026-07-06: 传incoming_code让Tier1也吃到v2.4阶段三转正的new_score/
+    # same_sector消融门（find_replaceable_position()现在是evaluate_
+    # replacement()的薄封装，见capacity_manager.py）——这两个门是全局
+    # config值，不是"只给非RSL路径用"的特例，RSL Tier1复用同一份基础
+    # OBSERVATION判断，理应跟着生效，再叠加自己的自适应门槛。
+    victim_code = find_replaceable_position(incoming_score, obs_pool, current_day_idx,
+                                             incoming_code=incoming_code)
     if victim_code is not None:
         victim_score = eligible[victim_code].get("total_score") or 0.0
         if incoming_score > victim_score + threshold:

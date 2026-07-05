@@ -62,7 +62,8 @@ def _rank_candidates(pool: Dict[str, dict], current_day_idx: int):
 
 def find_replaceable_position(incoming_score: float,
                                held_positions: Dict[str, dict],
-                               current_day_idx: int) -> Optional[str]:
+                               current_day_idx: int,
+                               incoming_code: Optional[str] = None) -> Optional[str]:
     """
     incoming_score  : 新FULL信号的 total_score（Fused Score，0-100）。
     held_positions  : code -> position dict。每个 dict 至少需要
@@ -74,21 +75,53 @@ def find_replaceable_position(incoming_score: float,
     current_day_idx : 当前 Decision Tick 的交易日序号，需要跟
                        held_positions 里的 entry_day_idx 用同一个坐标系
                        （backtest_portfolio.py 里就是逐日循环的 day_idx）。
+    incoming_code   : 新信号的股票代码，供 config.REPLACEMENT_BLOCK_
+                       SAME_SECTOR 过滤门判断板块归属用；不传时该过滤门
+                       等效不生效（config.SECTOR_MAP.get(None,"other")）。
+                       调用方如果知道incoming_code应该总是传，只有极少数
+                       历史调用点（RSL Tier1早期）不传，见下面说明。
+
+    2026-07-06重构：本函数不再自己实现候选排序/margin判断——那套逻辑
+    只在 evaluate_replacement() 里维护一份（Single Source of Truth），
+    backtest_portfolio.py / engine/runner.py / RSL Tier1 三个调用方
+    现在全部经由它，不会再出现"回测和实盘分别维护一套判断"的漂移风险。
+    本函数保留只是因为部分调用方（尤其是RSL Tier1）只需要一个"OBSERVATION
+    候选code或None"的窄接口，不需要完整的ReplacementEvaluation记录。
+    WEAK_FULL通道不会通过这个入口触发（不传full_score_history），维持
+    这个函数历史上"只做OBSERVATION"的窄契约。
 
     返回：应被置换让出名额的持仓 code；如果没有满足条件的候选（不存在
-    OBSERVATION持仓，或分数优势不够），返回 None——调用方此时应该回退到
-    原有的 Capacity Block（放弃本次开仓）行为，不做任何仓位变动。
+    OBSERVATION持仓、分数优势不够，或被上面提到的消融过滤门拦截），返回
+    None——调用方此时应该回退到原有的 Capacity Block（放弃本次开仓）
+    行为，不做任何仓位变动。
     """
+    evaluation = evaluate_replacement(
+        incoming_code=incoming_code, incoming_score=incoming_score,
+        held_positions=held_positions, current_day_idx=current_day_idx,
+        full_score_history=None)
+    return evaluation.victim_code if evaluation.decision == "REPLACE" else None
+
+
+def _best_weak_full_candidate(held_positions: Dict[str, dict],
+                               current_day_idx: int,
+                               full_score_history: Optional[List[float]]):
+    """WEAK_FULL候选池构建+排序，不做margin判断（margin判断由调用方做，
+    因为两个调用方——find_weak_full_replaceable_position()的窄"code或
+    None"契约、evaluate_replacement()需要区分KEEP/NO_CANDIDATE的完整
+    explain记录——对"margin不够"这件事需要给出不同的返回形状，唯一能
+    真正共用、不产生行为分歧的部分就是候选池本身怎么选、怎么排序）。
+    返回 (victim_code, victim_score) 或 (None, None)。
+    """
+    if not full_score_history or len(full_score_history) < config.REPLACEMENT_WEAK_FULL_MIN_HISTORY:
+        return None, None
+    cutoff = np.percentile(full_score_history, config.REPLACEMENT_WEAK_FULL_PERCENTILE)
     pool = {code: pos for code, pos in held_positions.items()
-            if pos.get("score_label") == LABEL_OBSERVATION}
+            if pos.get("score_label") == LABEL_FULL and (pos.get("total_score") or 0.0) < cutoff}
     candidates = _rank_candidates(pool, current_day_idx)
     if not candidates:
-        return None
-
+        return None, None
     victim_code, victim_score, _holding_days = candidates[0]
-    if incoming_score > victim_score + config.REPLACEMENT_MARGIN:
-        return victim_code
-    return None
+    return victim_code, victim_score
 
 
 def find_weak_full_replaceable_position(incoming_score: float,
@@ -104,17 +137,10 @@ def find_weak_full_replaceable_position(incoming_score: float,
     调用方应仅在 find_replaceable_position() 找不到候选时才调用本函数
     （OBSERVATION优先级高于WEAK_FULL，两者不竞争同一次置换机会）。
     """
-    if not full_score_history or len(full_score_history) < config.REPLACEMENT_WEAK_FULL_MIN_HISTORY:
+    victim_code, victim_score = _best_weak_full_candidate(
+        held_positions, current_day_idx, full_score_history)
+    if victim_code is None:
         return None
-
-    cutoff = np.percentile(full_score_history, config.REPLACEMENT_WEAK_FULL_PERCENTILE)
-    pool = {code: pos for code, pos in held_positions.items()
-            if pos.get("score_label") == LABEL_FULL and (pos.get("total_score") or 0.0) < cutoff}
-    candidates = _rank_candidates(pool, current_day_idx)
-    if not candidates:
-        return None
-
-    victim_code, victim_score, _holding_days = candidates[0]
     if incoming_score > victim_score + config.REPLACEMENT_MARGIN:
         return victim_code
     return None
@@ -189,14 +215,17 @@ def evaluate_replacement(incoming_code: str,
         return _record(victim_code, victim_score, REPL_OBSERVATION_EVICT)
 
     if config.REPLACEMENT_STANDALONE_WEAK_FULL_ENABLED:
-        if full_score_history and len(full_score_history) >= config.REPLACEMENT_WEAK_FULL_MIN_HISTORY:
-            cutoff = np.percentile(full_score_history, config.REPLACEMENT_WEAK_FULL_PERCENTILE)
-            wf_pool = {code: pos for code, pos in held_positions.items()
-                       if pos.get("score_label") == LABEL_FULL
-                       and (pos.get("total_score") or 0.0) < cutoff}
-            wf_candidates = _rank_candidates(wf_pool, current_day_idx)
-            if wf_candidates:
-                victim_code, victim_score, _ = wf_candidates[0]
-                return _record(victim_code, victim_score, REPL_WEAK_FULL_EVICT)
+        # 2026-07-06重构：候选池构建+排序复用 _best_weak_full_candidate()
+        # （find_weak_full_replaceable_position() 内部也调用同一个helper）
+        # ——之前这里是一份内联的重复实现，是用户点名要求清理的"重复Replace
+        # 判断"之一。margin判断仍在这里用 _record() 做（不是委托给
+        # find_weak_full_replaceable_position()本身），因为那个函数margin
+        # 不满足时直接返回None、丢失了"候选存在但优势不够"这个KEEP信号，
+        # 会让WEAK_FULL档位的Explain Layer退化成NO_CANDIDATE，丢失诊断
+        # 精度。
+        wf_victim, wf_score = _best_weak_full_candidate(
+            held_positions, current_day_idx, full_score_history)
+        if wf_victim is not None:
+            return _record(wf_victim, wf_score, REPL_WEAK_FULL_EVICT)
 
     return no_candidate
