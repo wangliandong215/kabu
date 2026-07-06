@@ -39,6 +39,12 @@ import config
 from engine.regime_features import extract_features
 
 
+MRD_VERSION = "1.0"   # this module's own classification-logic version, for
+                      # audit trails (e.g. engine/trade_tracker.py) that need
+                      # to record which MRD version produced a given regime
+                      # fact — bump only when classify_series()'s rules change.
+
+
 class Regime(Enum):
     """Extensible — new members (e.g. BULL_TREND, CRASH) can be added later
     without breaking existing consumers of the four stage-1 states."""
@@ -213,3 +219,29 @@ def classify(df: pd.DataFrame, classifier: RegimeClassifier = None) -> RegimeSna
         volume_ratio=last["volume_ratio"],
         confidence=last["confidence"],
     )
+
+
+def to_regime_ctx(snapshot: RegimeSnapshot) -> dict:
+    """Serialize a RegimeSnapshot into a JSON-ready dict for external
+    consumers that want to persist a regime fact without depending on the
+    Regime enum (e.g. engine/trade_tracker.py's log_entry/log_exit
+    `regime_ctx` argument). `regime_label` uses the enum member's own name
+    (e.g. "LOW_VOL_SIDEWAYS") rather than REGIME_NAMES' prose string, since
+    that's the stable, machine-groupable identifier downstream attribution
+    reports key off of."""
+    def _clean(v):
+        return None if (isinstance(v, float) and np.isnan(v)) else v
+
+    return {
+        "regime": snapshot.regime.value,
+        "regime_label": snapshot.regime.name,
+        "confidence": _clean(snapshot.confidence),
+        "features": {
+            "adx":          _clean(snapshot.adx),
+            "atr":          _clean(snapshot.atr),
+            "atr_pct":      _clean(snapshot.atr_pct),
+            "bb_width":     _clean(snapshot.bb_width),
+            "volume_ratio": _clean(snapshot.volume_ratio),
+        },
+        "timestamp": str(snapshot.timestamp) if snapshot.timestamp is not None else None,
+    }

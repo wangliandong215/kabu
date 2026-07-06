@@ -30,6 +30,7 @@ from risk.earnings import is_earnings_blackout
 from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
 from risk import guard, sizing
+from engine.trade_tracker import TradeTracker, build_regime_ctx
 
 
 def run_once(
@@ -75,6 +76,11 @@ def run_once(
               f"  dry_run={not confirmed}")
 
     portfolio = Portfolio()
+    try:
+        tracker = TradeTracker()   # v2.6 Trade Intelligence Database — side-effect-only
+    except Exception as exc:
+        alert.log(f"trade_tracker: init failed, trade DB disabled this pass — {exc}")
+        tracker = None
 
     # ── Portfolio-level guard ─────────────────────────────────────────────────
     if not guard.check_max_drawdown(portfolio):
@@ -138,6 +144,18 @@ def run_once(
                         position_count=portfolio.position_count(),
                         trade_id=portfolio.next_trade_id(), env=env_label,
                     )
+                    if tracker is not None:
+                        try:
+                            tracker.log_exit(
+                                trade_id=_trade_id(code, closed.get("entry_time")),
+                                price=price, cash=portfolio.available_cash(),
+                                equity=portfolio.current_equity(),
+                                timestamp=datetime.now().isoformat(),
+                                exit_reason="MA200_BREAK",
+                                regime_ctx=_trade_regime_ctx(code, ktype, bars),
+                            )
+                        except Exception as exc:
+                            alert.log(f"trade_tracker: log_exit failed {code} — {exc}")
             continue   # 跳过下面的普通持仓退出逻辑
 
         # Gather the SELL/HOLD signal from the strategy that opened this position.
@@ -189,6 +207,18 @@ def run_once(
                     position_count=portfolio.position_count(),
                     trade_id=portfolio.next_trade_id(), env=env_label,
                 )
+                if tracker is not None:
+                    try:
+                        tracker.log_exit(
+                            trade_id=_trade_id(code, closed.get("entry_time")),
+                            price=price, cash=portfolio.available_cash(),
+                            equity=portfolio.current_equity(),
+                            timestamp=datetime.now().isoformat(),
+                            exit_reason=reason,
+                            regime_ctx=_trade_regime_ctx(code, ktype, bars),
+                        )
+                    except Exception as exc:
+                        alert.log(f"trade_tracker: log_exit failed {code} — {exc}")
 
     # ── Macro news circuit breaker (checked once per pass) ───────────────────
     macro_block = news_sentiment.macro_circuit_breaker()
@@ -436,7 +466,7 @@ def run_once(
                 victim_code = _attempt_active_replacement(
                     portfolio, incoming_code=code, incoming_score=total.total,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
-                    results=results,
+                    results=results, tracker=tracker, ktype=ktype, bars=bars,
                 )
             if victim_code is None:
                 alert.warn("runner: MAX_POSITIONS reached — skip new entries")
@@ -524,6 +554,22 @@ def run_once(
                 position_count=portfolio.position_count(),
                 trade_id=portfolio.next_trade_id(), env=env_label,
             )
+            if tracker is not None:
+                try:
+                    pos_after = portfolio.get_position(code)
+                    tracker.log_entry(
+                        trade_id=_trade_id(code, pos_after.get("entry_time")),
+                        ticker=code, strategy_name=entry_strategy,
+                        strategy_version=config.SYSTEM_VERSION,
+                        direction="LONG", price=price, shares=qty,
+                        position_value=price * qty,
+                        position_pct=(price * qty) / portfolio.total_capital(),
+                        cash=portfolio.available_cash(), equity=portfolio.current_equity(),
+                        timestamp=pos_after.get("entry_time"),
+                        regime_ctx=_trade_regime_ctx(code, ktype, bars),
+                    )
+                except Exception as exc:
+                    alert.log(f"trade_tracker: log_entry failed {code} — {exc}")
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，只要不在持有中且 QQQ>MA200 就买回 ──
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
@@ -560,6 +606,26 @@ def run_once(
                             position_count=portfolio.position_count(),
                             trade_id=portfolio.next_trade_id(), env=env_label,
                         )
+                        if tracker is not None:
+                            try:
+                                pos_after = portfolio.get_position(config.QQQ_CORE_CODE)
+                                tracker.log_entry(
+                                    trade_id=_trade_id(config.QQQ_CORE_CODE,
+                                                       pos_after.get("entry_time")),
+                                    ticker=config.QQQ_CORE_CODE, strategy_name="core_etf",
+                                    strategy_version=config.SYSTEM_VERSION,
+                                    direction="LONG", price=qqq_price, shares=qty,
+                                    position_value=qqq_price * qty,
+                                    position_pct=(qqq_price * qty) / portfolio.total_capital(),
+                                    cash=portfolio.available_cash(),
+                                    equity=portfolio.current_equity(),
+                                    timestamp=pos_after.get("entry_time"),
+                                    regime_ctx=_trade_regime_ctx(
+                                        config.QQQ_CORE_CODE, ktype, bars),
+                                )
+                            except Exception as exc:
+                                alert.log(f"trade_tracker: log_entry failed "
+                                          f"{config.QQQ_CORE_CODE} — {exc}")
         else:
             alert.log(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
                       f"  (bear market, stay in cash)")
@@ -602,6 +668,28 @@ def run_loop(
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _trade_id(code: str, entry_time_iso: str) -> str:
+    """v2.6 Trade Intelligence Database round-trip key — must be derived the
+    same way at both open and close time without adding any new field to
+    Portfolio's position dict. entry_time is already unique per fill
+    (microsecond-precision ISO string set by Portfolio.open_position), so
+    f"{code}_{entry_time}" is a stable trade_id recoverable from the dict
+    portfolio.close_position() returns (it always includes entry_time)."""
+    return f"{code}_{entry_time_iso}"
+
+
+def _trade_regime_ctx(code: str, ktype: str = "K_DAY", bars: int = 120):
+    """Best-effort MRD snapshot for trade_tracker attribution. Never raises —
+    a failed regime fetch must not block or crash a trading pass, so this
+    degrades to regime_ctx=None (a NULL attribution row) on any error."""
+    try:
+        from data.fetcher import fetch_kline
+        df = fetch_kline(code, ktype=ktype, bars=bars)
+        return build_regime_ctx(df)
+    except Exception:
+        return None
+
 
 def _qqq_above_ma() -> bool:
     """
@@ -647,7 +735,8 @@ def _days_held(entry_time_iso) -> int:
 
 def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incoming_score: float,
                                 trd_env, env_label: str, confirmed: bool,
-                                results: dict) -> Optional[str]:
+                                results: dict, tracker: Optional[TradeTracker] = None,
+                                ktype: str = "K_DAY", bars: int = 120) -> Optional[str]:
     """v2.3/v2.4 Portfolio Capacity Manager 移植进实盘：MAX_POSITIONS已满
     时，尝试找一个可换出的持仓、真正执行SELL，为新的FULL信号腾出名额。
     判断逻辑调用 portfolio.capacity_manager.evaluate_replacement()——跟
@@ -716,6 +805,18 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
             position_count=portfolio.position_count(),
             trade_id=portfolio.next_trade_id(), env=env_label,
         )
+        if tracker is not None:
+            try:
+                tracker.log_exit(
+                    trade_id=_trade_id(victim_code, closed.get("entry_time")),
+                    price=victim_price, cash=portfolio.available_cash(),
+                    equity=portfolio.current_equity(),
+                    timestamp=datetime.now().isoformat(),
+                    exit_reason="ACTIVE_REPLACEMENT",
+                    regime_ctx=_trade_regime_ctx(victim_code, ktype, bars),
+                )
+            except Exception as exc:
+                alert.log(f"trade_tracker: log_exit failed {victim_code} — {exc}")
     return victim_code
 
 

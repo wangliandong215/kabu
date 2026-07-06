@@ -11,6 +11,12 @@ data_cache/
 # Simulated/live portfolio state (runtime data, regenerates on each run)
 portfolio/positions.json
 
+# v2.6 Trade Intelligence Database (runtime data — accumulates real trade
+# history, not source; see engine/trade_tracker.py)
+engine/trade_history.db
+engine/trade_history.db-wal
+engine/trade_history.db-shm
+
 # Editor/OS
 .vscode/
 .idea/
