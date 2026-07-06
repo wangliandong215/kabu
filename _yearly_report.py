@@ -124,11 +124,16 @@ def _period_metrics(eq: pd.Series, qqq: pd.Series, mask: np.ndarray,
         wins = yr_trades[yr_trades["pnl"] > 0]
         win_rate = len(wins) / n_trades
         gross_win = yr_trades.loc[yr_trades["pnl"] > 0, "pnl"].sum()
-        gross_loss = yr_trades.loc[yr_trades["pnl"] < 0, "pnl"].sum()
-        profit_factor = (gross_win / abs(gross_loss)) if gross_loss != 0 else float("inf")
+        gross_loss = abs(yr_trades.loc[yr_trades["pnl"] < 0, "pnl"].sum())
+        # No losing trades in this period -> capped sentinel, never inf/NaN,
+        # so a real (if lopsided) period never renders as blank in the report.
+        if gross_loss == 0:
+            profit_factor = 99.9 if gross_win > 0 else 0.0
+        else:
+            profit_factor = gross_win / gross_loss
     else:
         win_rate = 0.0
-        profit_factor = float("nan")
+        profit_factor = float("nan")   # genuinely zero trades this period -- no ratio to report
 
     return {
         "收益率%": round(port_ret * 100, 2),

@@ -44,11 +44,18 @@ def _load_closed_trades(db_path) -> pd.DataFrame:
 
 
 def _profit_factor(pnl: pd.Series) -> float:
-    gains = pnl[pnl > 0].sum()
-    losses = -pnl[pnl < 0].sum()
-    if losses == 0:
-        return float("inf") if gains > 0 else 0.0
-    return gains / losses
+    """Sum-based Profit Factor: gross_profit / gross_loss over the WHOLE
+    sample -- never the mean of individual trades' (or individual assets')
+    PF, which would let one huge winner or a single degenerate group skew
+    the aggregate. gross_loss == 0 (no losing trades in the group) returns a
+    capped sentinel rather than inf/NaN, so every downstream consumer
+    (console table, JSON export) always gets a plain finite number instead
+    of having to special-case infinity."""
+    gross_profit = pnl[pnl > 0].sum()
+    gross_loss = -pnl[pnl < 0].sum()   # sum of abs(losing pnl)
+    if gross_loss == 0:
+        return 99.9 if gross_profit > 0 else 0.0
+    return gross_profit / gross_loss
 
 
 def _summarize(df: pd.DataFrame) -> pd.DataFrame:
@@ -89,8 +96,7 @@ def main():
     display["total_pnl"]        = display["total_pnl"].map("{:,.2f}".format)
     display["avg_pnl"]          = display["avg_pnl"].map("{:,.2f}".format)
     display["avg_return"]       = display["avg_return"].map("{:.2%}".format)
-    display["profit_factor"]    = display["profit_factor"].map(
-        lambda v: "inf" if v == float("inf") else f"{v:.2f}")
+    display["profit_factor"]    = display["profit_factor"].map("{:.2f}".format)
     display["avg_holding_days"] = display["avg_holding_days"].map("{:.1f}".format)
     display["avg_position_pct"] = display["avg_position_pct"].map("{:.1%}".format)
     print(display.to_string(index=False))
@@ -100,8 +106,7 @@ def main():
         out[row["entry_regime_label"]] = {
             "trades":           int(row["trades"]),
             "win_rate":         round(float(row["win_rate"]), 4),
-            "profit_factor":    (round(float(row["profit_factor"]), 4)
-                                 if row["profit_factor"] != float("inf") else None),
+            "profit_factor":    round(float(row["profit_factor"]), 4),
             "avg_return":       round(float(row["avg_return"]), 4),
             "avg_holding_days": round(float(row["avg_holding_days"]), 2),
             "avg_position_pct": round(float(row["avg_position_pct"]), 4),
