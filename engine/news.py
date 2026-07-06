@@ -30,7 +30,7 @@ try:
 except ImportError:
     FINBERT_AVAILABLE = False
 
-alert.info(
+alert.log(
     "news: sentiment engine = "
     + ("FinBERT (ProsusAI/finbert)" if FINBERT_AVAILABLE else "keyword fallback (pip install transformers torch to upgrade)")
 )
@@ -153,12 +153,12 @@ def apply_filter(code: str, result: dict) -> Optional[dict]:
     if score > BOOST_THRESHOLD:
         old = result.get("signal_strength", 0.0)
         result["signal_strength"] = min(1.0, old * BOOST_FACTOR)
-        alert.info(
+        alert.log(
             f"news: {ticker:8s}  score={score:+.2f}  BOOST "
             f"{old:.0%} -> {result['signal_strength']:.0%}"
         )
     else:
-        alert.info(f"news: {ticker:8s}  score={score:+.2f}  neutral — proceed")
+        alert.log(f"news: {ticker:8s}  score={score:+.2f}  neutral — proceed")
 
     result["news_score"] = round(score, 3)
     return result

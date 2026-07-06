@@ -754,4 +754,25 @@ DINGTALK_WEBHOOK: str = os.getenv("KABU_DINGTALK_WEBHOOK", "")
 
 # Set env vars KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID to receive Telegram alerts.
 TELEGRAM_BOT_TOKEN: str = os.getenv("KABU_TELEGRAM_BOT_TOKEN", "")
+
+# ── Market Regime Detection / MRD (v2.5) ────────────────────────────────────────
+# Pure market-fact classifier (engine/market_regime.py + engine/regime_features.py)
+# — NOT wired into any trading decision path. Deliberately independent of
+# engine/regime.py's ADX/ATR thresholds (used for strategy routing) even though
+# some initial values below match it — the two modules must be free to diverge
+# without affecting each other. All thresholds live here so they can be tuned
+# without touching classification logic.
+MRD_ADX_PERIOD:               int   = 14
+MRD_ADX_TREND_MIN:            float = 25.0   # ADX >= this -> "trending" axis
+MRD_ATR_PERIOD:                int   = 14
+MRD_ATR_PCT_HIGH:              float = 0.03  # ATR/close >= this -> "high volatility" axis
+MRD_BB_PERIOD:                  int   = 20
+MRD_BB_STD:                     float = 2.0
+MRD_VOLUME_MA_PERIOD:           int   = 20
+MRD_VOLUME_RATIO_CONFIRM:       float = 1.5   # volume/avg >= this -> trend confidence bonus
+MRD_VOLUME_RATIO_WEAK:          float = 0.8   # volume/avg <  this -> trend confidence penalty
+MRD_ADX_CONFIDENCE_SCALE:       float = 15.0  # ADX units from threshold needed to reach 100 confidence
+MRD_ATR_PCT_CONFIDENCE_SCALE:   float = 0.02  # ATR% units from threshold needed to reach 100 confidence
+MRD_CONFIDENCE_VOLUME_BONUS:    float = 10.0
+MRD_CONFIDENCE_VOLUME_PENALTY:  float = 10.0
 TELEGRAM_CHAT_ID:   str = os.getenv("KABU_TELEGRAM_CHAT_ID", "")

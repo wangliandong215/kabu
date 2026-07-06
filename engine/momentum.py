@@ -66,8 +66,8 @@ def compute_momentum(
                 "return_pct": round(ret, 2),
                 "price":      round(float(p_now), 4),
             })
-            alert.info(f"momentum [{i}/{total}]: {code:<20s}  "
-                       f"return={ret:+.1f}%  price={p_now:.2f}")
+            alert.log(f"momentum [{i}/{total}]: {code:<20s}  "
+                      f"return={ret:+.1f}%  price={p_now:.2f}")
         except Exception as exc:
             alert.error(f"momentum [{i}/{total}]: {code} — {exc}")
 

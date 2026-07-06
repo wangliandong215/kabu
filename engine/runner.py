@@ -71,8 +71,8 @@ def run_once(
     score_env = "paper" if env_label == "SIMULATE" else "live"
 
     mode_label = "AUTO-ROUTE" if auto_route else strategy_name
-    alert.info(f"runner: starting pass  env={env_label}  mode={mode_label}"
-               f"  dry_run={not confirmed}")
+    alert.log(f"runner: starting pass  env={env_label}  mode={mode_label}"
+              f"  dry_run={not confirmed}")
 
     portfolio = Portfolio()
 
@@ -87,9 +87,9 @@ def run_once(
     open_codes = filter_open(watchlist)
     skipped = len(watchlist) - len(open_codes)
     if skipped:
-        alert.info(f"runner: {skipped} code(s) skipped — market closed")
+        alert.log(f"runner: {skipped} code(s) skipped — market closed")
     if not open_codes:
-        alert.info("runner: no markets open — pass skipped")
+        alert.log("runner: no markets open — pass skipped")
         return
 
     if auto_route:
@@ -225,7 +225,7 @@ def run_once(
             macro_block = macro_block or "MARKET_WEATHER_CODE_0: crisis regime — no new entries"
             alert.warn("runner: MARKET WEATHER CODE 0 — no new entries")
         else:
-            alert.info(f"runner: market weather code={weather_code}")
+            alert.log(f"runner: market weather code={weather_code}")
     except Exception as exc:
         alert.warn(f"runner: macro technical halt / market weather check failed — {exc}")
 
@@ -235,7 +235,7 @@ def run_once(
         dd = portfolio.equity_drawdown_pct()
         alert.warn(f"runner: HEADWIND mode  drawdown={dd:.1%}  kelly=0.5x")
     else:
-        alert.info(f"runner: TAILWIND mode  kelly=1.0x")
+        alert.log(f"runner: TAILWIND mode  kelly=1.0x")
 
     # ── 2a-2. Promote TRENDING_EARLY trials whose regime has confirmed to
     #        TRENDING_UP: top the position up from its 30% trial size to 100%.
@@ -320,8 +320,8 @@ def run_once(
                 continue
             # Right-side pyramid: price must not be too far above avg cost
             if price <= 0 or price > avg_cost * (1 + config.PYRAMID_MAX_ADD_ABOVE_COST):
-                alert.info(f"runner: {code} pyramid skip — price {price:.2f} "
-                           f"too far above avg cost {avg_cost:.2f}")
+                alert.log(f"runner: {code} pyramid skip — price {price:.2f} "
+                          f"too far above avg cost {avg_cost:.2f}")
                 continue
 
             stop_pct = float(result.get("stop_loss_pct", config.STOP_LOSS_PCT))
@@ -365,29 +365,29 @@ def run_once(
     active_count = sum(1 for p in portfolio.data["positions"].values()
                        if p.get("strategy") != "core_etf")
     slots_free   = config.MAX_POSITIONS - active_count
-    alert.info(f"runner: {len(buy_signals)} BUY signal(s) found, "
-               f"{slots_free} slot(s) available  (active={active_count})")
+    alert.log(f"runner: {len(buy_signals)} BUY signal(s) found, "
+              f"{slots_free} slot(s) available  (active={active_count})")
 
     for ranked in buy_signals:
         code   = ranked["code"]
         result = ranked
 
         if portfolio.get_position(code):
-            alert.info(f"runner: {code} already held — skip")
+            alert.log(f"runner: {code} already held — skip")
             continue
 
         if portfolio.is_cooldown(code):
-            alert.info(f"runner: {code} in TRENDING_EARLY stop-out cooldown — skip")
+            alert.log(f"runner: {code} in TRENDING_EARLY stop-out cooldown — skip")
             continue
 
         # Minimum signal quality gate — filter weak signals to reduce commission drag
         if result.get("signal_strength", 0) < config.MIN_ENTRY_STRENGTH:
-            alert.info(f"runner: {code} strength {result.get('signal_strength',0):.0%} "
-                       f"< {config.MIN_ENTRY_STRENGTH:.0%} threshold — skip")
+            alert.log(f"runner: {code} strength {result.get('signal_strength',0):.0%} "
+                      f"< {config.MIN_ENTRY_STRENGTH:.0%} threshold — skip")
             continue
 
         if macro_block:
-            alert.info(f"runner: {code} skipped — macro circuit breaker active")
+            alert.log(f"runner: {code} skipped — macro circuit breaker active")
             break
 
         # Earnings blackout — no new positions within ±1 day of earnings
@@ -412,7 +412,7 @@ def run_once(
         def _fmt(v):   # score components can be None (missing data, excluded/renormalized)
             return f"{v:5.1f}" if v is not None else "  N/A"
 
-        alert.info(
+        alert.log(
             f"SCORE {code:8s} trend={_fmt(total.trend_score)} "
             f"fund={_fmt(total.fundamental_score)} news={_fmt(total.news_score)} "
             f"weather={_fmt(total.weather_score)} total={_fmt(total.total)} "
@@ -561,10 +561,10 @@ def run_once(
                             trade_id=portfolio.next_trade_id(), env=env_label,
                         )
         else:
-            alert.info(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
-                       f"  (bear market, stay in cash)")
+            alert.log(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
+                      f"  (bear market, stay in cash)")
 
-    alert.info("runner: pass complete")
+    alert.log("runner: pass complete")
     portfolio.print_summary()
 
 
@@ -597,7 +597,7 @@ def run_loop(
         except Exception as exc:
             alert.error(f"runner: unhandled error in pass — {exc}")
 
-        alert.info(f"runner: sleeping {interval_seconds}s …")
+        alert.log(f"runner: sleeping {interval_seconds}s …")
         time.sleep(interval_seconds)
 
 
@@ -735,7 +735,7 @@ def _place_order(
     Dry-run mode (confirmed=False): logs intent only, never touches the broker.
     """
     if not confirmed:
-        alert.info(f"[DRY RUN] would {side} {qty}×{code} @ {price:.4f}")
+        alert.log(f"[DRY RUN] would {side} {qty}×{code} @ {price:.4f}")
         return ""
 
     import moomoo as ft

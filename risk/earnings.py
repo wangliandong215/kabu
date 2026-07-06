@@ -72,6 +72,6 @@ def _get_blacklist() -> Set[str]:
     _cache["ts"]        = now
     _cache["blacklist"] = blacklist
     if blacklist:
-        alert.info(f"earnings: blackout list ({len(blacklist)} stocks): "
-                   f"{sorted(blacklist)[:10]}{'...' if len(blacklist)>10 else ''}")
+        alert.log(f"earnings: blackout list ({len(blacklist)} stocks): "
+                  f"{sorted(blacklist)[:10]}{'...' if len(blacklist)>10 else ''}")
     return blacklist

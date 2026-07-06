@@ -31,8 +31,8 @@ def route(df, code: str = "") -> str | None:
 
     label = regime_label(regime)
     if strategy_name:
-        alert.info(f"router: {code:20s}  regime={label:12s}  -> {strategy_name}")
+        alert.log(f"router: {code:20s}  regime={label:12s}  -> {strategy_name}")
     else:
-        alert.info(f"router: {code:20s}  regime={label:12s}  -> SKIP")
+        alert.log(f"router: {code:20s}  regime={label:12s}  -> SKIP")
 
     return strategy_name

@@ -83,7 +83,7 @@ def scan(
             result["rsi14"] = rsi_last(df_confirmed["close"].astype(float))
             results[code] = result
 
-            alert.info(
+            alert.log(
                 f"scan [{i}/{total}]: {code:20s}  signal={result.get('signal','?'):4s}"
                 f"  strength={result.get('signal_strength', 0):.0%}"
                 f"  price={price:.4f}"
@@ -129,7 +129,7 @@ def smart_scan(
             strategy_name = config.REGIME_STRATEGY_MAP.get(regime)
 
             if strategy_name is None:
-                alert.info(
+                alert.log(
                     f"smart_scan [{i}/{total}]: {code:20s}"
                     f"  regime={regime_label(regime):12s}  -> SKIP"
                 )
@@ -157,7 +157,7 @@ def smart_scan(
             result["rsi14"]          = rsi_last(df_confirmed["close"].astype(float))
             results[code] = result
 
-            alert.info(
+            alert.log(
                 f"smart_scan [{i}/{total}]: {code:20s}"
                 f"  regime={regime_label(regime):12s}"
                 f"  strategy={strategy_name:12s}"

@@ -73,6 +73,14 @@ def warn(msg: str)  -> None: _emit("WARN",  msg)
 def error(msg: str) -> None: _emit("ERROR", msg)
 
 
+def log(msg: str) -> None:
+    """Console-only diagnostic/progress message — never pushed to DingTalk/Telegram.
+    Use for per-stock scan/routing chatter and routine status that isn't an
+    actionable trading event (use info/warn/error for anything that should
+    reach the phone)."""
+    print(f"[{_ts()}] [LOG  ] {msg}")
+
+
 # ── Exit reason display mapping ───────────────────────────────────────────────
 
 _EXIT_REASON_LABELS = {
