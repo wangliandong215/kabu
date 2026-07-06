@@ -115,7 +115,10 @@ def _period_metrics(eq: pd.Series, qqq: pd.Series, mask: np.ndarray,
         beta = float("nan")
     capm_alpha = ann_port - beta * ann_qqq if not np.isnan(beta) else float("nan")
 
-    yr_trades = trades_df[trades_df["year"] == year_label] if len(trades_df) else trades_df
+    if len(trades_df) == 0 or year_label == "ALL":
+        yr_trades = trades_df
+    else:
+        yr_trades = trades_df[trades_df["year"] == year_label]
     n_trades = len(yr_trades)
     if n_trades:
         wins = yr_trades[yr_trades["pnl"] > 0]
