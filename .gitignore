@@ -7,6 +7,7 @@ data_cache/
 
 # Ad-hoc analysis run logs (can reach 10MB+ per run, not source)
 *.log
+logs_europe_us.out
 
 # Simulated/live portfolio state (runtime data, regenerates on each run)
 portfolio/positions.json

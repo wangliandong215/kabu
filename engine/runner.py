@@ -474,8 +474,8 @@ def run_once(
             # 置换成立，名额已腾出——不 break，直接往下走已有的敞口/板块/
             # sizing/BUY逻辑，就像这个名额本来就空着一样。
         if not guard.check_total_exposure(portfolio):
-            alert.warn(f"runner: total exposure {portfolio.exposure_pct():.0%} "
-                       f">= {config.MAX_TOTAL_EXPOSURE_PCT:.0%} — skip new entries")
+            alert.log(f"runner: total exposure {portfolio.exposure_pct():.0%} "
+                      f">= {config.MAX_TOTAL_EXPOSURE_PCT:.0%} — skip new entries")
             break
         if not guard.check_sector_exposure(portfolio, code):
             sector = config.SECTOR_MAP.get(code, "other")

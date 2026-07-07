@@ -50,6 +50,11 @@ WATCHLIST_EUROPE_US: list = [
     "US.QCOM",  # Qualcomm
     "US.TXN",   # Texas Instruments
     "US.CSCO",  # Cisco
+    "US.STM",   # STMicroelectronics 意法半导体
+    "US.TSEM",  # Tower Semiconductor Tower半导体
+    "US.TSM",   # TSMC ADR 台积电
+    "US.LSCC",  # Lattice Semiconductor FPGA
+    "US.CRDO",  # Credo Technology Chiplet/连接芯片
 
     # Software & Cloud
     "US.ADBE",  # Adobe
@@ -67,6 +72,20 @@ WATCHLIST_EUROPE_US: list = [
     "US.VRSK",  # Verisk Analytics
     "US.ADP",   # Automatic Data Processing
     "US.PAYX",  # Paychex
+
+    # AI Infrastructure & Data Center
+    "US.SMCI",  # Super Micro Computer AI服务器
+    "US.ANET",  # Arista Networks AI网络
+    "US.VRT",   # Vertiv 数据中心
+    "US.DLR",   # Digital Realty 数据中心REIT
+    "US.EQIX",  # Equinix 数据中心REIT
+    "US.COHR",  # Coherent 光模块
+    "US.FN",    # Fabrinet 光模块
+    "US.CIEN",  # Ciena 光通信
+    "US.STX",   # Seagate Technology HDD
+    "US.WDC",   # Western Digital HDD
+    "US.SNDK",  # SanDisk 存储
+    "US.GLW",   # Corning 光纤/材料
 
     # Internet & E-Commerce
     "US.AMZN",  # Amazon
@@ -87,6 +106,8 @@ WATCHLIST_EUROPE_US: list = [
     "US.PLTR",  # Palantir
     "US.APP",   # AppLovin
     "US.ARM",   # ARM Holdings
+    "US.AI",    # C3.ai AI Agent
+    "US.ONDS",  # Ondas Holdings 无人机/无线网络
 
     # Biotech & Healthcare
     "US.AMGN",  # Amgen
@@ -122,6 +143,33 @@ WATCHLIST_EUROPE_US: list = [
     "US.BKR",   # Baker Hughes
     "US.FANG",  # Diamondback Energy
     "US.LIN",   # Linde
+    "US.CAT",   # Caterpillar 工程机械
+    "US.BE",    # Bloom Energy 燃料电池
+
+    # Industrial Automation & Robotics
+    "US.ROK",   # Rockwell Automation 工业自动化
+    "US.EMR",   # Emerson Electric 自动化
+    "US.SYM",   # Symbotic 机器人
+
+    # Aerospace & Defense
+    "US.GE",    # GE Aerospace 航空发动机
+    "US.HWM",   # Howmet Aerospace 航空零件
+    "US.RTX",   # RTX Corporation 国防
+    "US.LMT",   # Lockheed Martin 国防
+
+    # Space & Quantum Computing
+    "US.RKLB",  # Rocket Lab 火箭
+    "US.ASTS",  # AST SpaceMobile 卫星
+    "US.IONQ",  # IonQ 量子计算
+    "US.RGTI",  # Rigetti Computing 量子计算
+    "US.QBTS",  # D-Wave Quantum 量子计算
+    "US.QUBT",  # Quantum Computing Inc 量子计算
+    "US.SPCX",  # SpaceX（未上市，跟踪凭证/SPV类产品，行为可能与普通股票不同）
+
+    # Materials & Mining
+    "US.CCJ",   # Cameco 铀
+    "US.SCCO",  # Southern Copper 铜矿
+    "US.AA",    # Alcoa 铝业
 
     # Utilities
     "US.CEG",   # Constellation Energy
@@ -132,6 +180,29 @@ WATCHLIST_EUROPE_US: list = [
     # ETF (index tracking)
     "US.QQQ",   # NASDAQ-100 ETF
     "US.SPY",   # S&P 500 ETF
+    "US.VOO",   # Vanguard S&P 500 ETF
+    "US.RSP",   # Invesco S&P 500 Equal Weight ETF
+
+    # ETF (sector / thematic)
+    "US.IGV",   # iShares Expanded Tech-Software ETF
+    "US.SOXX",  # iShares Semiconductor ETF
+    "US.SMH",   # VanEck Semiconductor ETF
+    "US.XLI",   # Industrial Select Sector SPDR
+    "US.XAR",   # SPDR S&P Aerospace & Defense ETF
+    "US.PPA",   # Invesco Aerospace & Defense ETF
+    "US.SHLD",  # Global X Defense Tech ETF
+    "US.NASA",  # Tema Space Innovators ETF
+    "US.CHAT",  # Roundhill Generative AI & Technology ETF
+    "US.UFO",   # Procure Space ETF
+    "US.DRAM",  # Roundhill Memory ETF
+    "US.JEPI",  # JPMorgan Equity Premium Income ETF
+
+    # ETF (commodity / mining)
+    "US.GLD",   # SPDR Gold Shares
+    "US.SLV",   # iShares Silver Trust
+    "US.GDX",   # VanEck Gold Miners ETF
+    "US.COPX",  # Global X Copper Miners ETF
+    "US.URA",   # Global X Uranium ETF
 ]
 
 # 亚太地区 — 日本50只（本地代码）+ 台湾/韩国10只（moomoo 不支持本地 TW./KR.
@@ -214,7 +285,7 @@ WATCHLIST_ASIA_PACIFIC: list = [
 WATCHLIST: list = WATCHLIST_EUROPE_US + WATCHLIST_ASIA_PACIFIC
 
 # ── Capital ───────────────────────────────────────────────────────────────────
-INITIAL_CAPITAL: float = 50_000.0  # total account capital (USD)
+INITIAL_CAPITAL: float = 1_000_522.45  # total account capital (USD) — matches real SIMULATE balance queried 2026-07-06
 
 # ── Risk management ───────────────────────────────────────────────────────────
 MAX_POSITIONS:          int   = 10    # max simultaneous open positions (active signals only, excl. QQQ core)
@@ -619,7 +690,10 @@ SECTOR_MAP: dict = {
     "US.ON":   "semiconductor", "US.ASML": "semiconductor",
     "US.QCOM": "semiconductor",
     "US.TXN":  "semiconductor", "US.SNPS": "semiconductor",
-    "US.CDNS": "semiconductor",
+    "US.CDNS": "semiconductor", "US.CSCO": "semiconductor",
+    "US.STM":  "semiconductor", "US.TSEM": "semiconductor",
+    "US.TSM":  "semiconductor", "US.LSCC": "semiconductor",
+    "US.CRDO": "semiconductor",
     "JP.285A": "semiconductor", "JP.6146": "semiconductor",
     "JP.8035": "semiconductor", "JP.6920": "semiconductor",
     "JP.6857": "semiconductor", "JP.4062": "semiconductor",
@@ -630,6 +704,11 @@ SECTOR_MAP: dict = {
     "US.ZS":   "software", "US.TEAM": "software", "US.WDAY": "software",
     "US.DDOG": "software", "US.SNOW": "software", "US.OKTA": "software",
     "US.VRSK": "software", "US.ADP":  "software", "US.PAYX": "software",
+    # AI Infrastructure & Data Center
+    "US.SMCI": "datacenter", "US.ANET": "datacenter", "US.VRT": "datacenter",
+    "US.DLR":  "datacenter", "US.EQIX": "datacenter", "US.COHR": "datacenter",
+    "US.FN":   "datacenter", "US.CIEN": "datacenter", "US.STX":  "datacenter",
+    "US.WDC":  "datacenter", "US.SNDK": "datacenter", "US.GLW":  "datacenter",
     # Internet & Consumer Tech
     "US.AAPL": "internet", "US.AMZN": "internet", "US.META": "internet",
     "US.GOOGL":"internet", "US.GOOG": "internet", "US.NFLX": "internet",
@@ -639,6 +718,7 @@ SECTOR_MAP: dict = {
     "US.PDD":  "internet",
     # AI & Emerging
     "US.PLTR": "ai", "US.APP": "ai", "US.ARM": "ai",
+    "US.AI":   "ai", "US.ONDS": "ai",
     # Biotech
     "US.AMGN": "biotech", "US.GILD": "biotech", "US.VRTX": "biotech",
     "US.REGN": "biotech", "US.ISRG": "biotech", "US.IDXX": "biotech",
@@ -653,11 +733,29 @@ SECTOR_MAP: dict = {
     "US.HON":  "industrial", "US.PCAR": "industrial", "US.FAST": "industrial",
     "US.CPRT": "industrial", "US.CTAS": "industrial",
     "US.BKR":  "industrial", "US.FANG": "industrial", "US.LIN":  "industrial",
+    "US.CAT":  "industrial", "US.BE":   "industrial",
+    # Industrial Automation & Robotics
+    "US.ROK": "automation", "US.EMR": "automation", "US.SYM": "automation",
+    # Aerospace & Defense
+    "US.GE": "defense", "US.HWM": "defense",
+    "US.RTX": "defense", "US.LMT": "defense",
+    # Space & Quantum Computing
+    "US.RKLB": "quantum_space", "US.ASTS": "quantum_space",
+    "US.IONQ": "quantum_space", "US.RGTI": "quantum_space",
+    "US.QBTS": "quantum_space", "US.QUBT": "quantum_space",
+    "US.SPCX": "quantum_space",
+    # Materials & Mining
+    "US.CCJ": "materials", "US.SCCO": "materials", "US.AA": "materials",
     # Utilities
     "US.CEG": "utility", "US.EXC": "utility",
     "US.AEP": "utility", "US.XEL": "utility",
     # ETF
-    "US.QQQ": "etf", "US.SPY": "etf",
+    "US.QQQ": "etf", "US.SPY": "etf", "US.VOO": "etf", "US.RSP": "etf",
+    "US.IGV": "etf", "US.SOXX": "etf", "US.SMH": "etf", "US.XLI": "etf",
+    "US.XAR": "etf", "US.PPA": "etf", "US.SHLD": "etf", "US.NASA": "etf",
+    "US.CHAT": "etf", "US.UFO": "etf", "US.DRAM": "etf", "US.JEPI": "etf",
+    "US.GLD": "etf", "US.SLV": "etf", "US.GDX": "etf", "US.COPX": "etf",
+    "US.URA": "etf",
 }
 
 # ── Chinese display name map (for Telegram/DingTalk trade notifications) ──────
@@ -669,13 +767,19 @@ NAME_MAP: dict = {
     "US.KLAC": "科磊", "US.SNPS": "新思科技", "US.CDNS": "铿腾电子",
     "US.NXPI": "恩智浦", "US.MRVL": "迈威尔科技", "US.ON": "安森美",
     "US.ASML": "阿斯麦", "US.QCOM": "高通", "US.TXN": "德州仪器",
-    "US.CSCO": "思科",
+    "US.CSCO": "思科", "US.STM": "意法半导体", "US.TSEM": "Tower半导体",
+    "US.TSM": "台积电", "US.LSCC": "莱迪思半导体", "US.CRDO": "Credo Technology",
     # Software & Cloud
     "US.ADBE": "奥多比", "US.INTU": "财捷", "US.PANW": "派拓网络",
     "US.CRWD": "众击", "US.FTNT": "飞塔", "US.ZS": "Zscaler",
     "US.TEAM": "Atlassian", "US.WDAY": "Workday", "US.DDOG": "Datadog",
     "US.SNOW": "Snowflake", "US.OKTA": "Okta", "US.VRSK": "Verisk",
     "US.ADP": "自动数据处理", "US.PAYX": "Paychex",
+    # AI Infrastructure & Data Center
+    "US.SMCI": "美超微电脑", "US.ANET": "Arista Networks", "US.VRT": "维谛技术",
+    "US.DLR": "数字房地产信托", "US.EQIX": "易昆尼克斯", "US.COHR": "相干公司",
+    "US.FN": "Fabrinet", "US.CIEN": "Ciena", "US.STX": "希捷科技",
+    "US.WDC": "西部数据", "US.SNDK": "闪迪", "US.GLW": "康宁",
     # Internet & E-Commerce
     "US.AMZN": "亚马逊", "US.META": "Meta", "US.GOOGL": "谷歌A",
     "US.GOOG": "谷歌C", "US.NFLX": "奈飞", "US.TSLA": "特斯拉",
@@ -684,6 +788,7 @@ NAME_MAP: dict = {
     "US.PDD": "拼多多",
     # AI & Emerging Tech
     "US.PLTR": "帕兰提尔", "US.APP": "AppLovin", "US.ARM": "ARM控股",
+    "US.AI": "C3.ai", "US.ONDS": "Ondas Holdings",
     # Biotech & Healthcare
     "US.AMGN": "安进", "US.GILD": "吉利德科学", "US.VRTX": "福泰制药",
     "US.REGN": "再生元", "US.ISRG": "直觉外科", "US.IDXX": "IDEXX实验室",
@@ -698,11 +803,34 @@ NAME_MAP: dict = {
     "US.HON": "霍尼韦尔", "US.PCAR": "帕卡", "US.FAST": "快扣",
     "US.CPRT": "Copart", "US.CTAS": "信达思", "US.BKR": "贝克休斯",
     "US.FANG": "钻石背能源", "US.LIN": "林德集团",
+    "US.CAT": "卡特彼勒", "US.BE": "Bloom Energy",
+    # Industrial Automation & Robotics
+    "US.ROK": "罗克韦尔自动化", "US.EMR": "艾默生电气", "US.SYM": "Symbotic",
+    # Aerospace & Defense
+    "US.GE": "通用电气航空", "US.HWM": "豪梅特航空", "US.RTX": "雷神技术",
+    "US.LMT": "洛克希德·马丁",
+    # Space & Quantum Computing
+    "US.RKLB": "Rocket Lab", "US.ASTS": "AST SpaceMobile",
+    "US.IONQ": "IonQ", "US.RGTI": "Rigetti Computing",
+    "US.QBTS": "D-Wave Quantum", "US.QUBT": "Quantum Computing Inc",
+    "US.SPCX": "SpaceX",
+    # Materials & Mining
+    "US.CCJ": "Cameco", "US.SCCO": "南方铜业", "US.AA": "美国铝业",
     # Utilities
     "US.CEG": "星座能源", "US.EXC": "爱克斯龙",
     "US.AEP": "美国电力", "US.XEL": "埃克赛尔能源",
     # ETF
     "US.QQQ": "纳斯达克100ETF", "US.SPY": "标普500ETF",
+    "US.VOO": "先锋标普500ETF", "US.RSP": "标普500等权重ETF",
+    "US.IGV": "科技软件行业ETF", "US.SOXX": "半导体ETF-iShares",
+    "US.SMH": "半导体指数ETF-VanEck", "US.XLI": "工业指数ETF-SPDR",
+    "US.XAR": "航天与国防ETF-SPDR", "US.PPA": "航空航天与国防ETF-Invesco",
+    "US.SHLD": "国防科技ETF-Global X", "US.NASA": "太空创新ETF-Tema",
+    "US.CHAT": "生成式AI科技ETF-Roundhill", "US.UFO": "太空探索ETF-Procure",
+    "US.DRAM": "存储芯片ETF-Roundhill", "US.JEPI": "摩根大通股票溢价收益ETF",
+    "US.GLD": "黄金ETF-SPDR", "US.SLV": "白银ETF-iShares",
+    "US.GDX": "黄金矿业ETF-VanEck", "US.COPX": "铜矿ETF-Global X",
+    "US.URA": "铀矿ETF-Global X",
     # 半导体 & 电子设备 (Japan)
     "JP.8035": "东京电子", "JP.285A": "铠侠", "JP.6146": "迪斯科",
     "JP.6920": "Lasertec", "JP.6857": "爱德万测试", "JP.4063": "信越化学",

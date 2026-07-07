@@ -1,0 +1,73 @@
+{
+  "positions": {
+    "US.VRSK": {
+      "side": "BUY",
+      "entry_price": 186.33,
+      "avg_cost": 186.33,
+      "qty": 26,
+      "signal_strength": 0.5,
+      "strategy": "ma_rsi",
+      "entry_atr": 0.0,
+      "atr_mult": 4.0,
+      "breakeven_locked": false,
+      "trail_stop": null,
+      "entry_time": "2026-07-03T00:05:58.079493"
+    },
+    "US.PAYX": {
+      "side": "BUY",
+      "entry_price": 105.08,
+      "avg_cost": 105.08,
+      "qty": 42,
+      "signal_strength": 0.5,
+      "strategy": "ma_rsi",
+      "entry_atr": 0.0,
+      "atr_mult": 4.0,
+      "breakeven_locked": false,
+      "trail_stop": null,
+      "entry_time": "2026-07-03T00:05:58.202826"
+    },
+    "US.TSLA": {
+      "side": "BUY",
+      "entry_price": 395.96,
+      "avg_cost": 395.96,
+      "qty": 10,
+      "signal_strength": 0.5,
+      "strategy": "ma_rsi",
+      "entry_atr": 0.0,
+      "atr_mult": 4.0,
+      "breakeven_locked": false,
+      "trail_stop": null,
+      "entry_time": "2026-07-03T00:05:58.301138"
+    },
+    "US.ABNB": {
+      "side": "BUY",
+      "entry_price": 148.63,
+      "avg_cost": 148.63,
+      "qty": 24,
+      "signal_strength": 0.5,
+      "strategy": "ma_rsi",
+      "entry_atr": 0.0,
+      "atr_mult": 4.0,
+      "breakeven_locked": false,
+      "trail_stop": null,
+      "entry_time": "2026-07-03T00:05:58.449663"
+    },
+    "US.ALGN": {
+      "side": "BUY",
+      "entry_price": 183.36,
+      "avg_cost": 183.36,
+      "qty": 18,
+      "signal_strength": 0.5,
+      "strategy": "ma_rsi",
+      "entry_atr": 0.0,
+      "atr_mult": 4.0,
+      "breakeven_locked": false,
+      "trail_stop": null,
+      "entry_time": "2026-07-03T00:05:58.633887"
+    }
+  },
+  "peak_value": 50000.0,
+  "initial_cash": 50000.0,
+  "realized_pnl": 468.17000000000013,
+  "peak_equity": 50468.17
+}

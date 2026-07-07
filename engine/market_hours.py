@@ -5,8 +5,8 @@ Prevents wasting API calls on stocks whose markets are closed.
 All times are in JST (UTC+9).
 
 Market sessions (JST):
-  US stocks  — summer (EDT): 23:30 ~ next day 06:00
-             — winter (EST): 00:30 ~ next day 07:00
+  US stocks  — summer (EDT): 22:30 ~ next day 05:00
+             — winter (EST): 23:30 ~ next day 06:00
   JP stocks  — morning:  09:00 ~ 11:30
              — afternoon: 12:30 ~ 15:30
 
@@ -17,10 +17,10 @@ from datetime import datetime, time as dtime, date
 import pytz
 
 _JST = pytz.timezone("Asia/Tokyo")
-_US_SUMMER_OPEN  = dtime(23, 30)   # EDT
-_US_SUMMER_CLOSE = dtime( 6,  0)   # next day
-_US_WINTER_OPEN  = dtime( 0, 30)   # EST
-_US_WINTER_CLOSE = dtime( 7,  0)   # next day
+_US_SUMMER_OPEN  = dtime(22, 30)   # EDT
+_US_SUMMER_CLOSE = dtime( 5,  0)   # next day
+_US_WINTER_OPEN  = dtime(23, 30)   # EST
+_US_WINTER_CLOSE = dtime( 6,  0)   # next day
 _JP_MORNING_OPEN  = dtime( 9,  0)
 _JP_MORNING_CLOSE = dtime(11, 30)
 _JP_AFTERNOON_OPEN  = dtime(12, 30)

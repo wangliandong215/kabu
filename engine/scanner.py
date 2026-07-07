@@ -63,7 +63,7 @@ def scan(
         try:
             df = fetch_kline(code, ktype=ktype, bars=bars)
             if df is None or len(df) < strategy.required_bars:
-                alert.warn(
+                alert.log(
                     f"scan [{i}/{total}]: {code} too few bars "
                     f"({0 if df is None else len(df)} < {strategy.required_bars}), skipped"
                 )
@@ -74,7 +74,7 @@ def scan(
             # intraday flickering.  Current price is fetched separately.
             df_confirmed = _strip_live_bar(df, ktype, code)
             if len(df_confirmed) < strategy.required_bars:
-                alert.warn(f"scan [{i}/{total}]: {code} insufficient confirmed bars, skipped")
+                alert.log(f"scan [{i}/{total}]: {code} insufficient confirmed bars, skipped")
                 continue
 
             result = strategy.full_result(df_confirmed)
@@ -117,7 +117,7 @@ def smart_scan(
         try:
             df = fetch_kline(code, ktype=ktype, bars=bars)
             if df is None or len(df) < 30:
-                alert.warn(f"smart_scan [{i}/{total}]: {code} too few bars, skipped")
+                alert.log(f"smart_scan [{i}/{total}]: {code} too few bars, skipped")
                 continue
 
             # Strip live bar before regime + strategy computation (see _strip_live_bar).
@@ -143,7 +143,7 @@ def smart_scan(
 
             strategy = get_strategy(strategy_name)
             if len(df_confirmed) < strategy.required_bars:
-                alert.warn(
+                alert.log(
                     f"smart_scan [{i}/{total}]: {code} insufficient bars "
                     f"for {strategy_name}, skipped"
                 )
