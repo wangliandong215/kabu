@@ -48,6 +48,8 @@ class TestAttemptActiveReplacement(unittest.TestCase):
 
         self._orig_place_order = runner._place_order
         self._orig_get_price = runner.get_price
+        self._orig_trade_sell = runner.alert.trade_sell
+        runner.alert.trade_sell = lambda *a, **kw: None
         self.placed_orders = []
 
     def tearDown(self):
@@ -58,6 +60,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
         runner._place_order = self._orig_place_order
         runner.get_price = self._orig_get_price
+        runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
 
     def _mock_place_order(self, order_id_to_return="FAKE123"):
@@ -212,8 +215,10 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         self.portfolio = Portfolio(path=Path(self._tmpdir.name) / "positions.json")
         self._orig_place_order = runner._place_order
         self._orig_get_price = runner.get_price
+        self._orig_trade_sell = runner.alert.trade_sell
         runner._place_order = lambda code, side, qty, price, trd_env, env_label, confirmed: "FAKE"
         runner.get_price = lambda code: 12.0
+        runner.alert.trade_sell = lambda *a, **kw: None
 
     def tearDown(self):
         config.REPLACEMENT_MARGIN = self._orig_margin
@@ -225,6 +230,7 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         config.SECTOR_MAP.update(self._orig_sector_map)
         runner._place_order = self._orig_place_order
         runner.get_price = self._orig_get_price
+        runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
 
     def _seed(self, code, score_label, total_score, held_days_ago=5):

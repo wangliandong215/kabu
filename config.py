@@ -905,8 +905,8 @@ MRD_CONFIDENCE_VOLUME_BONUS:    float = 10.0
 MRD_CONFIDENCE_VOLUME_PENALTY:  float = 10.0
 TELEGRAM_CHAT_ID:   str = os.getenv("KABU_TELEGRAM_CHAT_ID", "")
 
-# ── System version (v2.6) ────────────────────────────────────────────────────
+# ── System version (v2.8) ────────────────────────────────────────────────────
 # Recorded into engine/trade_tracker.py's trades.strategy_version column —
 # per-strategy versioning doesn't exist yet, so this project-wide version
 # string is used as a proxy for "which codebase version produced this trade".
-SYSTEM_VERSION: str = "2.6"
+SYSTEM_VERSION: str = "2.8"
