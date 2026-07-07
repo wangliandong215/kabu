@@ -518,7 +518,9 @@ def simulate_from_prepared(prepared: dict, cash: float,
                            currency: str = "$",
                            sim_start: Optional[str] = None,
                            sim_end: Optional[str] = None,
-                           atr_mult_series: Optional[pd.Series] = None) -> dict:
+                           atr_mult_series: Optional[pd.Series] = None,
+                           regime_lookup: Optional[Dict[str, pd.DataFrame]] = None,
+                           enable_bear_gate: bool = False) -> dict:
     """Steps 4-5: day-by-day simulation + stats, run against data already
     fetched by _prepare_backtest_data(). Split out so a parameter sweep (e.g.
     over ATR_TRAIL_MULT) can re-simulate many times against one fetch instead
@@ -537,6 +539,38 @@ def simulate_from_prepared(prepared: dict, cash: float,
         engine.regime.dynamic_atr_multiplier_series()). If omitted, falls
         back to the flat module constant ATR_TRAIL_MULT everywhere, exactly
         as before this parameter existed.
+    regime_lookup : V2.7 Stage 4 — optional {code: DataFrame} from
+        engine.hmm_regime.decode_regime_series_causal() (columns: regime,
+        confidence, duration; date-indexed), one entry per stock that has a
+        trained engine/hmm_regime.py model. NOT a plain classify_series()
+        batch call — must be a walk-forward, no-look-ahead decode or any
+        conclusion drawn from the tagged trades (rule backtest OR pure
+        analytics) would be invalid. Stocks absent from regime_lookup (no
+        trained HMM model) are never tagged/gated, exactly as if this
+        parameter were omitted for them.
+
+        Supplying regime_lookup ALWAYS tags every trade_log entry
+        (regime_at_entry/confidence_at_entry/duration_at_entry and the
+        matching _at_exit fields, all analytics-only) regardless of
+        enable_bear_gate — this is what V2.7 Stage 4's "Regime Analytics"
+        phase (2026-07-08) uses: observe which regime each historical trade
+        happened in WITHOUT changing any trading decision, to let the
+        statistics (not intuition) suggest which rule, if any, is worth
+        trying next.
+    enable_bear_gate : V2.7 Stage 4, Round 1's actual trading-rule
+        experiment ("suppress new entries while a stock's HMM regime is
+        Bear") — OFF by default. Only takes effect when regime_lookup is
+        also supplied; has no effect on its own. Existing positions are
+        never touched by this gate (they keep exiting via their normal
+        stop-loss/take-profit/strategy-SELL logic in step 4a) — it only
+        removes candidates before they reach buy_candidates in step 4c.
+        Round 1 (2026-07-08) found this rule made portfolio-level Sharpe/
+        MDD/Calmar WORSE, not better (see project memory) — paused pending
+        the Regime Analytics results, not because this flag is broken.
+
+    If both regime_lookup and enable_bear_gate are omitted/False (the
+    default), this function's behavior is byte-identical to before either
+    parameter existed — same discipline as atr_mult_series above.
     """
     stocks          = prepared["stocks"]
     start           = sim_start or prepared["start"]
@@ -595,6 +629,24 @@ def simulate_from_prepared(prepared: dict, cash: float,
     # 记录"如果放行会换出谁"，但不执行——用于ablation实验判断这个低频档位
     # 是尾部风险截断还是冗余路径，见 analytics/weak_full_ablation.py。
     shadow_replacements: List[dict] = []
+
+    def _regime_at(code: str, at_ts) -> tuple:
+        """V2.7 Stage 4 — (regime, confidence, duration) for `code` on
+        `at_ts`, or (None, None, None) if regime_lookup wasn't supplied, this
+        code has no trained HMM model, or at_ts predates that model's
+        HMM_MIN_DECODE_BARS warmup. analytics-only; return value is never
+        used to gate anything by itself (see enable_bear_gate at the one
+        call site in step 4c that actually branches on it)."""
+        if regime_lookup is None or code not in regime_lookup:
+            return None, None, None
+        reg_df = regime_lookup[code]
+        if at_ts not in reg_df.index:
+            return None, None, None
+        row = reg_df.loc[at_ts]
+        regime = row["regime"]
+        if regime is None or (isinstance(regime, float) and np.isnan(regime)):
+            return None, None, None
+        return regime, float(row["confidence"]), float(row["duration"])
 
     def _deployed() -> float:
         return sum(p["avg_cost"] * p["qty"] for p in positions.values())
@@ -726,6 +778,7 @@ def simulate_from_prepared(prepared: dict, cash: float,
                     cooldowns[code] = day_idx + config.TRENDING_EARLY_COOLDOWN_DAYS
 
             round_trip_fee = round(fee + pos.get("avg_cost", exit_price) * qty * COMMISSION, 2)
+            regime_at_exit, confidence_at_exit, duration_at_exit = _regime_at(code, ts)
             trade_log.append({
                 "date": today, "code": code, "side": "SELL",
                 "qty": qty, "price": exit_price,
@@ -733,6 +786,14 @@ def simulate_from_prepared(prepared: dict, cash: float,
                 "strategy": pos.get("strategy"),
                 "entry_date": pos.get("entry_date"),
                 "fee": round_trip_fee,
+                # analytics-only, V2.7 Stage 4 (Regime Analytics, 2026-07-08):
+                "entry_price": pos.get("avg_cost"),
+                "regime_at_entry": pos.get("regime_at_entry"),
+                "confidence_at_entry": pos.get("confidence_at_entry"),
+                "duration_at_entry": pos.get("duration_at_entry"),
+                "regime_at_exit": regime_at_exit,
+                "confidence_at_exit": confidence_at_exit,
+                "duration_at_exit": duration_at_exit,
             })
             eq = _equity()
             if eq > peak_equity:
@@ -828,6 +889,15 @@ def simulate_from_prepared(prepared: dict, cash: float,
             row = sig_df.loc[ts]
             if row["signal"] != "BUY" or row["strength"] <= 0:
                 continue
+            # V2.7 Stage 4: look up this stock's HMM regime today, purely for
+            # tagging (Regime Analytics, 2026-07-08) — existing positions and
+            # their exit logic (4a, above) are never consulted here, so this
+            # cannot force-close anything either way. Only actually removes
+            # the candidate when enable_bear_gate=True (Round 1's rule,
+            # currently paused — see docstring); tagging itself never gates.
+            regime_at_entry, confidence_at_entry, duration_at_entry = _regime_at(code, ts)
+            if enable_bear_gate and regime_at_entry == "Bear":
+                continue
             if ts not in all_data[code].index:
                 continue
             price = float(all_data[code].loc[ts, "close"])
@@ -840,6 +910,10 @@ def simulate_from_prepared(prepared: dict, cash: float,
                 "strategy": str(row["strategy"]),
                 "atr": float(row["atr"]) if not np.isnan(row["atr"]) else 0.0,
                 "rsi14": float(row["rsi14"]) if not np.isnan(row["rsi14"]) else None,
+                # analytics-only, V2.7 Stage 4:
+                "regime_at_entry": regime_at_entry,
+                "confidence_at_entry": confidence_at_entry,
+                "duration_at_entry": duration_at_entry,
             })
 
         buy_candidates = [c for c in buy_candidates if c["strength"] >= MIN_ENTRY_STRENGTH]
@@ -1083,6 +1157,7 @@ def simulate_from_prepared(prepared: dict, cash: float,
                     cand["total_score"] - (victim_pos.get("total_score") or 0.0), 2)
                 round_trip_fee = round(
                     v_fee + victim_pos.get("avg_cost", v_exit_price) * v_qty * COMMISSION, 2)
+                v_regime_at_exit, v_confidence_at_exit, v_duration_at_exit = _regime_at(victim_code, ts)
                 trade_log.append({
                     "date": today, "code": victim_code, "side": "SELL",
                     "qty": v_qty, "price": v_exit_price,
@@ -1094,6 +1169,14 @@ def simulate_from_prepared(prepared: dict, cash: float,
                     "replacement_score_delta": replacement_score_delta,
                     "replacement_type": replacement_type,
                     "replacement_stability_score": replacement_stability_score,
+                    # analytics-only, V2.7 Stage 4 (Regime Analytics, 2026-07-08):
+                    "entry_price": victim_pos.get("avg_cost"),
+                    "regime_at_entry": victim_pos.get("regime_at_entry"),
+                    "confidence_at_entry": victim_pos.get("confidence_at_entry"),
+                    "duration_at_entry": victim_pos.get("duration_at_entry"),
+                    "regime_at_exit": v_regime_at_exit,
+                    "confidence_at_exit": v_confidence_at_exit,
+                    "duration_at_exit": v_duration_at_exit,
                 })
                 replacements.append({
                     "date": today, "day_idx": day_idx,
@@ -1213,6 +1296,10 @@ def simulate_from_prepared(prepared: dict, cash: float,
                 "breakeven_locked": False,   # 2026-07-06新增，配合guard.breakeven_lock_floor()
                 "score_label":     cand["score_label"],   # analytics-only
                 "total_score":     cand["total_score"],   # analytics-only + v2.3 capacity manager input
+                # analytics-only, V2.7 Stage 4:
+                "regime_at_entry":     cand.get("regime_at_entry"),
+                "confidence_at_entry": cand.get("confidence_at_entry"),
+                "duration_at_entry":   cand.get("duration_at_entry"),
             }
             trade_log.append({
                 "date": today, "code": code, "side": "BUY",

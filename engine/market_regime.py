@@ -47,12 +47,22 @@ MRD_VERSION = "1.0"   # this module's own classification-logic version, for
 
 class Regime(Enum):
     """Extensible — new members (e.g. BULL_TREND, CRASH) can be added later
-    without breaking existing consumers of the four stage-1 states."""
+    without breaking existing consumers of the four stage-1 states.
+
+    HMM_* members (10-13) are stage-2's namespace (engine/hmm_regime.py,
+    V2.7 Stage 3) — a numerically separate range from the stage-1 rule-based
+    states (0-3) so the two axes (ADX/ATR-threshold regime vs. learned HMM
+    regime) are never confusable at a glance, even though both are legal
+    Regime values wherever a RegimeSnapshot is consumed."""
     UNKNOWN            = -1   # insufficient warm-up data — no fact to report
     LOW_VOL_SIDEWAYS   = 0
     HIGH_VOL_SIDEWAYS  = 1
     LOW_VOL_TREND      = 2
     HIGH_VOL_TREND     = 3
+    HMM_BEAR           = 10
+    HMM_CORRECTION     = 11
+    HMM_SIDEWAYS       = 12
+    HMM_BULL           = 13
 
 
 REGIME_NAMES = {
@@ -61,6 +71,10 @@ REGIME_NAMES = {
     Regime.HIGH_VOL_SIDEWAYS: "High Volatility Sideways",
     Regime.LOW_VOL_TREND:     "Low Volatility Trend",
     Regime.HIGH_VOL_TREND:    "High Volatility Trend",
+    Regime.HMM_BEAR:          "Bear",
+    Regime.HMM_CORRECTION:    "Correction",
+    Regime.HMM_SIDEWAYS:      "Sideways",
+    Regime.HMM_BULL:          "Bull",
 }
 
 

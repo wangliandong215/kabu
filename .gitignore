@@ -18,6 +18,15 @@ engine/trade_history.db
 engine/trade_history.db-wal
 engine/trade_history.db-shm
 
+# V2.7 Stage 3 HMM regime models — regenerable from data_cache/ via
+# `python -m engine.hmm_regime --codes ...` (engine/hmm_regime.py), not source
+engine/hmm_models/
+
+# V2.7 Stage 3 Shadow Mode runtime state/log — accumulates over time, not
+# source (see engine/regime_store.py, engine/hmm_shadow.py)
+engine/regime_state.json
+engine/regime_shadow_log.csv
+
 # Editor/OS
 .vscode/
 .idea/
