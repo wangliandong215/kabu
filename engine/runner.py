@@ -11,6 +11,7 @@ Security constraints enforced here:
   • Default environment is always SIMULATE.
 """
 import time
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -30,7 +31,9 @@ from risk.earnings import is_earnings_blackout
 from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
 from risk import guard, sizing
-from engine.trade_tracker import TradeTracker, build_regime_ctx
+from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
+                                   default_parameter_snapshot,
+                                   compute_parameter_hash)
 
 
 def run_once(
@@ -41,6 +44,7 @@ def run_once(
     confirmed: bool = False,
     use_real: bool = False,
     auto_route: bool = False,
+    run_id: Optional[str] = None,
 ) -> None:
     """
     One full pipeline pass:
@@ -56,7 +60,16 @@ def run_once(
     use_real : bool
         Must be True to use live/real-money environment. Ignored unless
         confirmed=True. When False, forces SIMULATE regardless of config.
+    run_id : Optional[str]
+        v2.8 Trade Intelligence Database run grouping. run_loop() generates
+        one run_id per loop invocation and threads it through every pass so
+        a whole trading session's trades share one metadata row; a
+        standalone one-off run_once() call auto-generates its own if not
+        given, so its trades still get tagged with *some* run_id.
     """
+    if run_id is None:
+        run_id = uuid.uuid4().hex
+
     # ── Determine trade environment ───────────────────────────────────────────
     if use_real and confirmed:
         trd_env = parse_trd_env(config.TRD_ENV)
@@ -119,6 +132,26 @@ def run_once(
 
         if price <= 0:
             continue
+
+        # v2.8 Trade Intelligence Database — daily MFE/MAE snapshot. Runs for
+        # every open position every pass (including core_etf, before its
+        # early `continue` below), purely additive/side-effect-free like
+        # every other tracker.* call site. Uses entry_atr (not a freshly
+        # re-fetched ATR) to avoid duplicating the fetch the normal branch
+        # already does further below — an acceptable approximation for a
+        # daily high-water-mark snapshot.
+        if tracker is not None:
+            try:
+                tracker.update_position_metrics(
+                    trade_id=_trade_id(code, pos.get("entry_time")),
+                    date=datetime.now().strftime("%Y-%m-%d"),
+                    close=price, entry_price=pos["entry_price"],
+                    shares=pos["qty"], direction="LONG",
+                    atr=pos.get("entry_atr"),
+                    regime_ctx=_trade_regime_ctx(code, ktype, bars),
+                )
+            except Exception as exc:
+                alert.log(f"trade_tracker: update_position_metrics failed {code} — {exc}")
 
         # ── QQQ Beta 底仓："死仓"，唯一退出条件是跌破 MA200 ──────────────────
         # 死命令（用户明确要求）：这里 continue 提前跳出，不会走到下面的
@@ -524,9 +557,10 @@ def run_once(
             alert.warn(f"runner: {code} qty=0 at price={price:.4f} — skip")
             continue
 
+        entry_rank = buy_signals.index(ranked) + 1
         alert.info(f"runner: BUY  {code}  qty={qty}  price={price:.4f}"
                    f"  strength={result.get('signal_strength', 0):.0%}"
-                   f"  rank=#{buy_signals.index(ranked)+1}")
+                   f"  rank=#{entry_rank}")
         order_id = _place_order(
             code=code,
             side="BUY",
@@ -567,6 +601,10 @@ def run_once(
                         cash=portfolio.available_cash(), equity=portfolio.current_equity(),
                         timestamp=pos_after.get("entry_time"),
                         regime_ctx=_trade_regime_ctx(code, ktype, bars),
+                        run_id=run_id, atr_entry=result.get("atr", 0.0),
+                        sector=config.SECTOR_MAP.get(code, "other"),
+                        market_environment=weather_code, entry_rank=entry_rank,
+                        risk_per_trade=config.RISK_PER_TRADE_PCT,
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_entry failed {code} — {exc}")
@@ -622,6 +660,8 @@ def run_once(
                                     timestamp=pos_after.get("entry_time"),
                                     regime_ctx=_trade_regime_ctx(
                                         config.QQQ_CORE_CODE, ktype, bars),
+                                    run_id=run_id, sector="etf",
+                                    market_environment=weather_code,
                                 )
                             except Exception as exc:
                                 alert.log(f"trade_tracker: log_entry failed "
@@ -644,8 +684,24 @@ def run_loop(
     use_real: bool = False,
     auto_route: bool = False,
 ) -> None:
-    """Block and call run_once every interval_seconds."""
-    alert.info(f"runner: loop started  interval={interval_seconds}s")
+    """Block and call run_once every interval_seconds.
+
+    v2.8: generates one run_id for this whole loop invocation and threads it
+    through every run_once() pass, so every trade from this trading session
+    shares one metadata row in the Trade Intelligence Database — best
+    effort, never blocks the loop from starting if it fails."""
+    run_id = uuid.uuid4().hex
+    try:
+        params = default_parameter_snapshot()
+        TradeTracker().log_run_metadata(
+            run_id=run_id, strategy_version=config.SYSTEM_VERSION,
+            market="SIMULATE" if not use_real else config.TRD_ENV,
+            parameter_hash=compute_parameter_hash(params),
+        )
+    except Exception as exc:
+        alert.log(f"trade_tracker: log_run_metadata failed — {exc}")
+
+    alert.info(f"runner: loop started  interval={interval_seconds}s  run_id={run_id}")
     while True:
         try:
             run_once(
@@ -656,6 +712,7 @@ def run_loop(
                 confirmed=confirmed,
                 use_real=use_real,
                 auto_route=auto_route,
+                run_id=run_id,
             )
         except KeyboardInterrupt:
             alert.info("runner: loop stopped by user")
@@ -680,13 +737,20 @@ def _trade_id(code: str, entry_time_iso: str) -> str:
 
 
 def _trade_regime_ctx(code: str, ktype: str = "K_DAY", bars: int = 120):
-    """Best-effort MRD snapshot for trade_tracker attribution. Never raises —
-    a failed regime fetch must not block or crash a trading pass, so this
-    degrades to regime_ctx=None (a NULL attribution row) on any error."""
+    """Best-effort regime snapshot for trade_tracker attribution. v2.8:
+    prefers engine.regime_store's HMM output (engine/hmm_shadow.py's daily
+    batch) — tried first with no kline fetch at all. Only falls back to a
+    fresh fetch_kline() + the rule-based classifier when the HMM store has
+    no entry yet for `code`. Never raises — a failed regime fetch must not
+    block or crash a trading pass, so this degrades to regime_ctx=None (a
+    NULL attribution row) on any error."""
     try:
+        ctx = build_regime_ctx_preferring_hmm(code)
+        if ctx is not None:
+            return ctx
         from data.fetcher import fetch_kline
         df = fetch_kline(code, ktype=ktype, bars=bars)
-        return build_regime_ctx(df)
+        return build_regime_ctx_preferring_hmm(code, df)
     except Exception:
         return None
 

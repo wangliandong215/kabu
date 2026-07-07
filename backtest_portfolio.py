@@ -610,6 +610,15 @@ def simulate_from_prepared(prepared: dict, cash: float,
     # 自己的 shadow_replacements/decide() 诊断路径，两套机制不混用同一份
     # 统计口径。
     replacement_attempts: List[dict] = []
+    # V2.8 Trade Intelligence Database — one row per open position per day
+    # (code/date/close/high/low/atr/regime/confidence/entry_date/
+    # entry_price/shares), purely additive bookkeeping in the same spirit as
+    # capacity_blocks/replacements above: appended in the day loop below but
+    # never read by anything inside this function, only consumed post-hoc by
+    # engine.trade_tracker.ingest_backtest_trade_log(daily_position_log=...)
+    # to populate trade_daily (MFE/MAE). Cannot affect any trading decision
+    # by construction — nothing in this function ever reads it back.
+    daily_position_log: List[dict] = []
     peak_equity   = cash
     realized_pnl  = 0.0
     news_stats    = {"blocked": 0, "boosted": 0, "macro_block_days": 0}
@@ -692,6 +701,23 @@ def simulate_from_prepared(prepared: dict, cash: float,
             clo  = float(bar["close"])
             ep   = pos["avg_cost"]
             strat = pos.get("strategy", "")
+
+            # V2.8 Trade Intelligence Database — one daily_position_log row
+            # per open position per day, for every strategy including
+            # core_etf. Pure list append, read by nothing else in this
+            # function (see the declaration above) — cannot affect `reason`/
+            # `exit_price`/positions/sizing below.
+            atr_for_log = (float(signals[code].loc[ts, "atr"])
+                           if code in signals and ts in signals[code].index
+                           else pos.get("entry_atr"))
+            regime_at_ts, confidence_at_ts, _ = _regime_at(code, ts)
+            daily_position_log.append({
+                "code": code, "date": today, "close": clo, "high": high,
+                "low": low, "atr": atr_for_log, "regime": regime_at_ts,
+                "confidence": confidence_at_ts,
+                "entry_date": pos.get("entry_date"),
+                "entry_price": pos["avg_cost"], "shares": pos["qty"],
+            })
 
             reason = ""
             exit_price = clo
@@ -1419,6 +1445,7 @@ def simulate_from_prepared(prepared: dict, cash: float,
                                                           # 时写入
         "shadow_replacements": shadow_replacements,   # v2.4 WEAK FULL shadow mode 观测记录
         "trade_log": trade_log,
+        "daily_position_log": daily_position_log,   # V2.8 Trade Intelligence Database — analytics-only
         # Exposed whenever there's something to show — macro_block_days now
         # also counts QQQ technical halts (see 4c-macro above), which fire
         # regardless of whether a news_feed was supplied.

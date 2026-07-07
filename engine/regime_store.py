@@ -98,10 +98,14 @@ def update_regime(
 def get_regime_interface(code: str) -> dict:
     """
     The read-only Regime Interface: current_regime, regime_confidence,
-    regime_duration, regime_changed_today. All-None/zero defaults if `code`
-    has no recorded regime yet (e.g. Shadow Mode hasn't run for it, or its
-    HMM model hasn't been trained) — callers should treat that as "no
-    opinion," not as a specific regime.
+    regime_duration, regime_changed_today, hmm_version. All-None/zero
+    defaults if `code` has no recorded regime yet (e.g. Shadow Mode hasn't
+    run for it, or its HMM model hasn't been trained) — callers should treat
+    that as "no opinion," not as a specific regime.
+
+    hmm_version added V2.8 (engine/trade_tracker.py's Trade Intelligence
+    Database is the first real consumer of this interface) — it was already
+    stored per-entry by update_regime() but not previously exposed here.
     """
     entry = _load()["regimes"].get(code)
     if entry is None:
@@ -110,12 +114,14 @@ def get_regime_interface(code: str) -> dict:
             "regime_confidence": None,
             "regime_duration": 0,
             "regime_changed_today": False,
+            "hmm_version": None,
         }
     return {
         "current_regime": entry["regime"],
         "regime_confidence": entry["confidence"],
         "regime_duration": entry["duration_days"],
         "regime_changed_today": entry["changed_today"],
+        "hmm_version": entry.get("hmm_version"),
     }
 
 
