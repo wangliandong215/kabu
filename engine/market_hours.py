@@ -13,7 +13,7 @@ Market sessions (JST):
 DST: US daylight saving is active from 2nd Sunday of March to
 1st Sunday of November (approximately April–October in JST terms).
 """
-from datetime import datetime, time as dtime, date
+from datetime import datetime, time as dtime, date, timedelta
 import pytz
 
 _JST = pytz.timezone("Asia/Tokyo")
@@ -50,6 +50,54 @@ def is_open(code: str) -> bool:
 def filter_open(codes: list) -> list:
     """Return only the codes whose market is currently open."""
     return [c for c in codes if is_open(c)]
+
+
+def is_daytime_jst(now: datetime = None) -> bool:
+    """True during the JP trading-day window (09:00-15:30 JST, including
+    the lunch break) — used to pick which regional watchlist to scan by
+    default. Everything outside this window (evening through next
+    morning) is treated as the EU/US trading night. This is a coarse
+    day/night split for choosing *which pool* to scan; per-stock
+    is_open()/filter_open() still gate whether an order can actually be
+    placed."""
+    if now is None:
+        now = datetime.now(_JST)
+    elif now.tzinfo is None:
+        now = _JST.localize(now)
+    return _JP_MORNING_OPEN <= now.time() < _JP_AFTERNOON_CLOSE
+
+
+def just_closed(minutes_after: int = 5, window_minutes: int = 10,
+                 now: datetime = None) -> bool:
+    """True once `now` (defaults to current JST time) is `minutes_after`
+    past today's US market close, for a `window_minutes`-wide window —
+    used to fire a one-time post-close notification without needing
+    exact alignment with the polling interval."""
+    if now is None:
+        now = datetime.now(_JST)
+    elif now.tzinfo is None:
+        now = _JST.localize(now)
+
+    close_t = _US_SUMMER_CLOSE if is_us_dst(now.date()) else _US_WINTER_CLOSE
+    notify_start = _JST.localize(datetime.combine(now.date(), close_t)) + timedelta(minutes=minutes_after)
+    notify_end = notify_start + timedelta(minutes=window_minutes)
+    return notify_start <= now < notify_end
+
+
+_last_close_notified: date = None
+
+
+def should_notify_close() -> bool:
+    """Stateful wrapper around just_closed(): returns True at most once
+    per calendar day (JST), the first time a caller polls inside the
+    post-close notification window. Callers don't need to track dates
+    themselves — just call this once per pass and act if it returns True."""
+    global _last_close_notified
+    now = datetime.now(_JST)
+    if just_closed(now=now) and _last_close_notified != now.date():
+        _last_close_notified = now.date()
+        return True
+    return False
 
 
 def _in_us_session(t: dtime, d: date) -> bool:

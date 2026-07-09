@@ -8,7 +8,6 @@ The cache stores the full lookback DataFrame per (code, ktype).
 A stale entry is re-fetched transparently.
 """
 import pickle
-import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -131,8 +130,7 @@ def _fetch_from_opend(code: str, ktype: str) -> pd.DataFrame:
             ktype=_ktype_enum(ktype), autype=AuType.QFQ, max_count=1000,
         )
         if ret != RET_OK:
-            print(f"[ERROR] fetch_kline({code}): {data}")
-            sys.exit(1)
+            raise RuntimeError(f"fetch_kline({code}): {data}")
         frames.append(data)
 
         page = 1

@@ -26,7 +26,7 @@ from engine import fundamental
 from engine import scoring
 from engine import regime
 from engine import market_weather
-from engine.market_hours import filter_open
+from engine.market_hours import filter_open, should_notify_close, is_daytime_jst
 from risk.earnings import is_earnings_blackout
 from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
@@ -34,6 +34,17 @@ from risk import guard, sizing
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash)
+
+
+def select_watchlist() -> List[str]:
+    """Default watchlist when no --codes override is given: JP trading
+    hours (09:00-15:30 JST) scan/trade WATCHLIST_ASIA_PACIFIC, everything
+    else (evening through next morning, covering the US session) scans
+    WATCHLIST_EUROPE_US. Re-evaluated on every run_once() call so a
+    long-running loop naturally switches pools as the day/night boundary
+    is crossed, instead of freezing whichever pool was current at
+    process launch."""
+    return config.WATCHLIST_ASIA_PACIFIC if is_daytime_jst() else config.WATCHLIST_EUROPE_US
 
 
 def run_once(
@@ -100,7 +111,7 @@ def run_once(
         alert.warn("runner: MAX DRAWDOWN exceeded — halting all trades this pass")
         return
 
-    watchlist = codes or config.WATCHLIST
+    watchlist = codes or select_watchlist()
 
     # Filter to markets currently open (prevents dead scans on closed exchanges)
     open_codes = filter_open(watchlist)
@@ -719,6 +730,9 @@ def run_loop(
             break
         except Exception as exc:
             alert.error(f"runner: unhandled error in pass — {exc}")
+
+        if should_notify_close():
+            alert.warn("runner: 美股收盘，停止扫描")
 
         alert.log(f"runner: sleeping {interval_seconds}s …")
         time.sleep(interval_seconds)

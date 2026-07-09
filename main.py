@@ -32,12 +32,83 @@ Safety:
   - Default is always SIMULATE.
 """
 import argparse
+import ctypes
+import os
+import sys
+from pathlib import Path
 
 import config
 from engine.runner import run_once, run_loop
+from notify import alert
+
+# Keep a reference alive so the ctypes callback isn't garbage-collected —
+# SetConsoleCtrlHandler only stores a raw function pointer.
+_shutdown_handler_ref = None
+
+_LOCK_PATH = Path(__file__).resolve().parent / ".kabu_loop.lock"
+
+
+def _is_pid_running(pid: int) -> bool:
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if handle:
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    return False
+
+
+def _acquire_single_instance_lock() -> None:
+    """Refuse to start a second concurrent trading loop against the same
+    portfolio/positions.json — two live instances placing orders in
+    parallel is a real risk (e.g. Windows' "restart apps after sign-in"
+    reviving a stale process with an old command line). Whichever
+    instance is already running keeps the lock; a new launch just exits."""
+    if _LOCK_PATH.exists():
+        try:
+            old_pid = int(_LOCK_PATH.read_text().strip())
+        except (ValueError, OSError):
+            old_pid = None
+        if old_pid and old_pid != os.getpid() and _is_pid_running(old_pid):
+            alert.error(
+                f"runner: another kabu instance is already running "
+                f"(pid={old_pid}) — refusing to start a second one"
+            )
+            sys.exit(1)
+    _LOCK_PATH.write_text(str(os.getpid()))
+
+
+def _register_shutdown_notifier() -> None:
+    """Best-effort Telegram/DingTalk alert when Windows is shutting down,
+    logging off, or closing this console — covers the process being killed
+    by the OS (e.g. a scheduled `shutdown` task) rather than stopped
+    gracefully with Ctrl+C, which engine/runner.py's loop already reports
+    via alert.info("runner: loop stopped by user")."""
+    if sys.platform != "win32":
+        return
+    global _shutdown_handler_ref
+
+    HANDLER_ROUTINE = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)
+    EVENT_NAMES = {2: "CTRL_CLOSE", 5: "CTRL_LOGOFF", 6: "CTRL_SHUTDOWN"}
+
+    def _handler(ctrl_type: int) -> int:
+        name = EVENT_NAMES.get(ctrl_type)
+        if name:
+            alert.warn(f"runner: process stopping — {name}（Windows关闭/注销/关闭控制台）")
+        return 0  # not handled — let the OS proceed with default shutdown
+
+    _shutdown_handler_ref = HANDLER_ROUTINE(_handler)
+    ctypes.windll.kernel32.SetConsoleCtrlHandler(_shutdown_handler_ref, True)
 
 
 def cli_main() -> None:
+    _acquire_single_instance_lock()
+    _register_shutdown_notifier()
     p = argparse.ArgumentParser(
         description="kabu pipeline runner (moomoo OpenD)",
         epilog=(
@@ -74,7 +145,9 @@ def cli_main() -> None:
                    help="Auto-route strategy per stock via market regime detection")
     args = p.parse_args()
 
-    codes = args.codes or config.WATCHLIST
+    # None (not config.WATCHLIST) when --codes is omitted: run_once()/select_watchlist()
+    # then pick EU/US vs Asia-Pacific dynamically each pass based on JST time of day.
+    codes = args.codes
 
     if args.interval > 0:
         run_loop(
