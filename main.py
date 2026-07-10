@@ -39,7 +39,7 @@ from pathlib import Path
 
 import config
 from engine.runner import run_once, run_loop
-from notify import alert
+from notify import alert, telegram_bot
 
 # Keep a reference alive so the ctypes callback isn't garbage-collected —
 # SetConsoleCtrlHandler only stores a raw function pointer.
@@ -109,6 +109,7 @@ def _register_shutdown_notifier() -> None:
 def cli_main() -> None:
     _acquire_single_instance_lock()
     _register_shutdown_notifier()
+    telegram_bot.start()
     p = argparse.ArgumentParser(
         description="kabu pipeline runner (moomoo OpenD)",
         epilog=(

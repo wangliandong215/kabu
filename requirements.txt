@@ -12,3 +12,4 @@ torch>=2.0.0            # FinBERT inference backend
 hmmlearn>=0.3.0         # Gaussian HMM market regime detection (v27_hmm/)
 scikit-learn>=1.3       # StandardScaler feature scaling (v27_hmm/)
 seaborn>=0.13           # v27_hmm visualization (backtrader uses matplotlib alone)
+anthropic>=0.69.0       # Claude API SDK (notify/telegram_bot.py Q&A bot)

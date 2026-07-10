@@ -199,7 +199,33 @@ class TradeTracker:
         with _write_lock:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.executescript(_SCHEMA)
+            self._migrate_missing_columns()
             self._conn.commit()
+
+    def _migrate_missing_columns(self) -> None:
+        """CREATE TABLE IF NOT EXISTS never widens an existing table, so a
+        trades.db created before a schema addition (e.g. the v2.8 run_id/
+        atr_entry/... columns) silently lacks those columns forever and every
+        insert naming them fails. Heal it here with ALTER TABLE ADD COLUMN,
+        which SQLite allows for nullable columns with no default-value
+        backfill needed."""
+        expected = {
+            "trades": [
+                ("exit_reason_code", "TEXT"), ("run_id", "TEXT"),
+                ("atr_entry", "REAL"), ("sector", "TEXT"),
+                ("market_environment", "INTEGER"), ("entry_rank", "INTEGER"),
+                ("confidence_score", "REAL"), ("risk_per_trade", "REAL"),
+                ("commission", "REAL"), ("slippage", "REAL"),
+                ("mfe", "REAL"), ("mae", "REAL"),
+            ],
+        }
+        for table, columns in expected.items():
+            existing = {row["name"] for row in
+                        self._conn.execute(f"PRAGMA table_info({table})")}
+            for name, sql_type in columns:
+                if name not in existing:
+                    self._conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
 
     def close(self) -> None:
         self._conn.close()
