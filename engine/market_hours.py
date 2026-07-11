@@ -35,15 +35,19 @@ def is_us_dst(d: date) -> bool:
 def is_open(code: str) -> bool:
     """True if the stock's home market is currently in trading hours."""
     now_jst = datetime.now(_JST)
-    if now_jst.weekday() >= 5:   # Saturday / Sunday
-        return False
-
     market = code.split(".")[0].upper() if "." in code else "US"
 
     if market == "JP":
+        # JP sessions never cross midnight, so a blanket weekend guard is safe.
+        if now_jst.weekday() >= 5:
+            return False
         return _in_jp_session(now_jst.time())
 
-    # US (and default)
+    # US (and default): the session opens 22:30/23:30 JST and runs past
+    # midnight, so a naive weekday()>=5 guard here would wrongly block the
+    # Saturday-early-morning JST tail of Friday's still-open session.
+    # _in_us_session() checks the weekday of the session's *opening* JST
+    # calendar day instead of the current one.
     return _in_us_session(now_jst.time(), now_jst.date())
 
 
@@ -101,14 +105,20 @@ def should_notify_close() -> bool:
 
 
 def _in_us_session(t: dtime, d: date) -> bool:
+    """Session spans midnight (open_ > close_), so whether `t` falls inside
+    it depends on which JST calendar day the *opening* half belongs to —
+    not on today's weekday. `t < close_` is the tail end of a session that
+    opened on `d - 1 day`; `t >= open_` is a session opening on `d` itself."""
     dst = is_us_dst(d)
     open_  = _US_SUMMER_OPEN  if dst else _US_WINTER_OPEN
     close_ = _US_SUMMER_CLOSE if dst else _US_WINTER_CLOSE
 
-    # Session spans midnight: open_ > close_
-    if open_ > close_:
-        return t >= open_ or t < close_
-    return open_ <= t < close_
+    if t < close_:
+        session_day = d - timedelta(days=1)
+        return session_day.weekday() < 5
+    if t >= open_:
+        return d.weekday() < 5
+    return False
 
 
 def _in_jp_session(t: dtime) -> bool:
