@@ -89,7 +89,7 @@ def scan(
                 f"  price={price:.4f}"
             )
         except Exception as exc:
-            alert.error(f"scan [{i}/{total}]: {code} failed — {exc}")
+            alert.error(f"扫描 {code}（第{i}/{total}只）失败 — {exc}")
 
         if i < total:
             time.sleep(_REQUEST_DELAY)
@@ -167,7 +167,7 @@ def smart_scan(
             )
 
         except Exception as exc:
-            alert.error(f"smart_scan [{i}/{total}]: {code} failed — {exc}")
+            alert.error(f"智能扫描 {code}（第{i}/{total}只）失败 — {exc}")
 
         if i < total:
             time.sleep(_REQUEST_DELAY)

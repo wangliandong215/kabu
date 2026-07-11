@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(taskkill *)",
+      "Bash(powershell *)",
+      "Bash(pwsh *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Start-Process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(tasklist *)",
+      "PowerShell(netstat *)",
+      "PowerShell(schtasks *)",
+      "PowerShell(Register-ScheduledTask *)",
+      "PowerShell(Get-ScheduledTask *)",
+      "PowerShell(Unregister-ScheduledTask *)",
+      "PowerShell(New-ScheduledTaskAction *)",
+      "PowerShell(New-ScheduledTaskTrigger *)",
+      "PowerShell(New-ScheduledTaskSettingsSet *)"
+    ]
+  }
+}

@@ -143,11 +143,11 @@ def apply_filter(code: str, result: dict) -> Optional[dict]:
     ticker = _ticker(code)
 
     if blocked_reason:
-        alert.warn(f"news: {ticker:8s}  CIRCUIT BREAKER — {blocked_reason}")
+        alert.warn(f"{ticker} 新闻熔断 — {blocked_reason}")
         return None
 
     if score < FILTER_THRESHOLD:
-        alert.warn(f"news: {ticker:8s}  score={score:+.2f}  BLOCKED (negative sentiment)")
+        alert.warn(f"{ticker} 新闻情绪分{score:+.2f}，判定负面被拦截")
         return None
 
     if score > BOOST_THRESHOLD:
@@ -260,7 +260,7 @@ def _fetch(code: str) -> List[dict]:
         finally:
             ctx.close()
     except Exception as exc:
-        alert.warn(f"news: fetch error for {_ticker(code)} — {exc}")
+        alert.warn(f"{_ticker(code)} 新闻获取失败 — {exc}")
 
     return results
 

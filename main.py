@@ -76,8 +76,8 @@ def _acquire_single_instance_lock() -> None:
             old_pid = None
         if old_pid and old_pid != os.getpid() and _is_pid_running(old_pid):
             alert.error(
-                f"runner: another kabu instance is already running "
-                f"(pid={old_pid}) — refusing to start a second one"
+                f"已有一个kabu监控在运行（pid={old_pid}），"
+                f"本次启动被拒绝，避免重复下单"
             )
             sys.exit(1)
     _LOCK_PATH.write_text(str(os.getpid()))
@@ -88,18 +88,18 @@ def _register_shutdown_notifier() -> None:
     logging off, or closing this console — covers the process being killed
     by the OS (e.g. a scheduled `shutdown` task) rather than stopped
     gracefully with Ctrl+C, which engine/runner.py's loop already reports
-    via alert.info("runner: loop stopped by user")."""
+    via alert.info("kabu 监控已手动停止")."""
     if sys.platform != "win32":
         return
     global _shutdown_handler_ref
 
     HANDLER_ROUTINE = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)
-    EVENT_NAMES = {2: "CTRL_CLOSE", 5: "CTRL_LOGOFF", 6: "CTRL_SHUTDOWN"}
+    EVENT_NAMES = {2: "控制台被关闭", 5: "用户注销", 6: "系统关机"}
 
     def _handler(ctrl_type: int) -> int:
         name = EVENT_NAMES.get(ctrl_type)
         if name:
-            alert.warn(f"runner: process stopping — {name}（Windows关闭/注销/关闭控制台）")
+            alert.warn(f"kabu 监控即将停止 — 原因：{name}")
         return 0  # not handled — let the OS proceed with default shutdown
 
     _shutdown_handler_ref = HANDLER_ROUTINE(_handler)

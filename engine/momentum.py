@@ -69,7 +69,7 @@ def compute_momentum(
             alert.log(f"momentum [{i}/{total}]: {code:<20s}  "
                       f"return={ret:+.1f}%  price={p_now:.2f}")
         except Exception as exc:
-            alert.error(f"momentum [{i}/{total}]: {code} — {exc}")
+            alert.error(f"动量计算 {code}（第{i}/{total}只）失败 — {exc}")
 
     scores.sort(key=lambda x: x["return_pct"], reverse=True)
     return scores

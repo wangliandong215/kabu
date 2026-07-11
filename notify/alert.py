@@ -26,16 +26,27 @@ def _ts() -> str:
 
 
 def _emit(level: str, msg: str) -> None:
+    # Console keeps the [LEVEL] tag for grepping log files; the phone push
+    # drops [kabu]/[LEVEL] since msg is plain Chinese and self-explanatory.
     print(f"[{_ts()}] [{level:5s}] {msg}")
-    _push_all(f"[{level}] {msg}")
+    _push_all(msg, prefix="")
 
 
-def _push_all(msg: str) -> None:
-    _push_dingtalk(msg)
-    _push_telegram(msg)
+def _push_all(msg: str, prefix: str = "[kabu] ") -> None:
+    _push_dingtalk(msg, prefix)
+    _push_telegram(msg, prefix)
 
 
-def _push_dingtalk(msg: str) -> None:
+def push_raw(msg: str) -> None:
+    """Push msg to DingTalk/Telegram with no [kabu]/[LEVEL] prefix at all —
+    for callers that want a clean, self-contained message rather than the
+    standard console-log-style formatting (e.g. watchdog.py, whose alerts
+    are already self-explanatory without extra tagging)."""
+    print(f"[{_ts()}] {msg}")
+    _push_all(msg, prefix="")
+
+
+def _push_dingtalk(msg: str, prefix: str = "[kabu] ") -> None:
     webhook = getattr(config, "DINGTALK_WEBHOOK", "")
     if not webhook:
         return
@@ -43,14 +54,14 @@ def _push_dingtalk(msg: str) -> None:
         import requests
         requests.post(
             webhook,
-            json={"msgtype": "text", "text": {"content": f"[kabu] {msg}"}},
+            json={"msgtype": "text", "text": {"content": f"{prefix}{msg}"}},
             timeout=5,
         )
     except Exception:
         pass
 
 
-def _push_telegram(msg: str) -> None:
+def _push_telegram(msg: str, prefix: str = "[kabu] ") -> None:
     token = getattr(config, "TELEGRAM_BOT_TOKEN", "")
     chat_id = getattr(config, "TELEGRAM_CHAT_ID", "")
     if not token or not chat_id:
@@ -59,7 +70,7 @@ def _push_telegram(msg: str) -> None:
         import requests
         requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": f"[kabu] {msg}"},
+            json={"chat_id": chat_id, "text": f"{prefix}{msg}"},
             timeout=5,
         )
     except Exception:

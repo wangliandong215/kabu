@@ -13,6 +13,7 @@ Security constraints enforced here:
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
 import config
@@ -107,9 +108,17 @@ def run_once(
         tracker = None
 
     # ── Portfolio-level guard ─────────────────────────────────────────────────
-    if not guard.check_max_drawdown(portfolio):
-        alert.warn("runner: MAX DRAWDOWN exceeded — halting all trades this pass")
-        return
+    # 2026-07-11 fix: this used to `return` here, which skipped scan() and the
+    # exit-check loop below entirely — meaning a drawdown breach (exactly the
+    # moment stop-losses matter most) silently disabled hard stop-loss/ATR
+    # trailing/take-profit checks for every open position for that whole
+    # pass. Now it only feeds into `macro_block` (set further below, after
+    # the exit-check loop runs) so it blocks new BUY/PROMOTE/Replacement the
+    # same way the news/QQQ-technical/market-weather breakers already do —
+    # SELL/EXIT is never gated by any of the four breakers.
+    drawdown_halt = not guard.check_max_drawdown(portfolio)
+    if drawdown_halt:
+        alert.warn("触发最大回撤熔断，本轮禁止新开仓（已持仓位仍正常检查退出）")
 
     watchlist = codes or select_watchlist()
 
@@ -171,8 +180,8 @@ def run_once(
         # MA200 才清仓。不要在这个分支之外给 core_etf 加任何止损/止盈判断。
         if entry_strat == "core_etf":
             if not _qqq_above_ma():
-                alert.warn(f"runner: QQQ core exit — broke below "
-                           f"MA{config.QQQ_MA_PERIOD}  now={price:.2f}")
+                alert.warn(f"QQQ底仓跌破MA{config.QQQ_MA_PERIOD}"
+                           f"（现价{price:.2f}），清仓退出")
                 order_id = _place_order(
                     code=code, side="SELL", qty=pos["qty"], price=price,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
@@ -228,9 +237,8 @@ def run_once(
         )
 
         if reason:
-            alert.warn(f"runner: exit triggered  {code}  reason={reason}"
-                       f"  strategy={entry_strat}"
-                       f"  entry={pos['entry_price']:.4f}  now={price:.4f}")
+            alert.warn(f"{code} 触发退出（{reason}），策略={entry_strat}，"
+                       f"成本={pos['entry_price']:.4f}，现价={price:.4f}")
             order_id = _place_order(
                 code=code,
                 side="SELL",
@@ -267,7 +275,9 @@ def run_once(
     # ── Macro news circuit breaker (checked once per pass) ───────────────────
     macro_block = news_sentiment.macro_circuit_breaker()
     if macro_block:
-        alert.warn(f"runner: MACRO CIRCUIT BREAKER — {macro_block} — no new entries")
+        alert.warn(f"新闻面熔断触发（{macro_block}），本轮不再开新仓")
+    if not macro_block and drawdown_halt:
+        macro_block = "MAX_DRAWDOWN_HALT: realized drawdown exceeded threshold"
 
     # ── QQQ macro technical halt + Market Weather regime (checked once per
     #    pass) ───────────────────────────────────────────────────────────────
@@ -292,22 +302,22 @@ def run_once(
 
         if not macro_block and regime.qqq_macro_halt(qqq_df):
             macro_block = f"QQQ_TECHNICAL_HALT: below MA{config.QQQ_MA_PERIOD} + steep MA{regime._MACRO_HALT_MA_PERIOD} downslope"
-            alert.warn(f"runner: MACRO TECHNICAL HALT — {macro_block} — no new entries")
+            alert.warn(f"大盘技术面熔断（{macro_block}），本轮不再开新仓")
 
         weather_code = market_weather.market_weather(qqq_df)
         if weather_code == 0:
             macro_block = macro_block or "MARKET_WEATHER_CODE_0: crisis regime — no new entries"
-            alert.warn("runner: MARKET WEATHER CODE 0 — no new entries")
+            alert.warn("大盘天气进入危机状态（状态0），本轮不再开新仓")
         else:
             alert.log(f"runner: market weather code={weather_code}")
     except Exception as exc:
-        alert.warn(f"runner: macro technical halt / market weather check failed — {exc}")
+        alert.warn(f"大盘熔断/天气检测失败 — {exc}")
 
     # ── 2a. Half-Kelly state ──────────────────────────────────────────────────
     kelly_factor = 0.5 if portfolio.is_headwind() else 1.0
     if kelly_factor < 1.0:
         dd = portfolio.equity_drawdown_pct()
-        alert.warn(f"runner: HEADWIND mode  drawdown={dd:.1%}  kelly=0.5x")
+        alert.warn(f"进入逆风模式（回撤{dd:.1%}），仓位系数减半")
     else:
         alert.log(f"runner: TAILWIND mode  kelly=1.0x")
 
@@ -355,8 +365,8 @@ def run_once(
             if add_qty <= 0:
                 continue
 
-            alert.info(f"runner: PROMOTE  {code}  atr_breakout_early -> atr_breakout"
-                       f"  add={add_qty}  price={price:.4f}")
+            alert.info(f"{code} 试错仓位转正（early→confirmed），"
+                       f"加仓{add_qty}股 @{price:.4f}")
             order_id = _place_order(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
@@ -376,7 +386,11 @@ def run_once(
                 )
 
     # ── 2b. Pyramid scale-in for existing positions ───────────────────────────
-    if config.PYRAMID_ENABLED:
+    # 2026-07-11 fix: pyramid adds increase portfolio risk exposure exactly
+    # like a new BUY/PROMOTE/Replacement — must be gated by the same
+    # macro_block used everywhere else (news/QQQ-technical/market-weather/
+    # MAX_DRAWDOWN), not a second independent risk check.
+    if config.PYRAMID_ENABLED and not macro_block:
         for code, pos in list(portfolio.data["positions"].items()):
             if pos.get("strategy") == "core_etf":
                 continue   # QQQ Beta floor is a fixed "dead" position — never resized
@@ -413,9 +427,9 @@ def run_once(
             if add_qty <= 0:
                 continue
 
-            alert.info(f"runner: PYRAMID  {code}  add={add_qty}  "
-                       f"strength {old_str:.0%}->{new_str:.0%}  "
-                       f"avg_cost={avg_cost:.2f}  price={price:.2f}")
+            alert.info(f"{code} 加仓（金字塔），+{add_qty}股，"
+                       f"信号强度{old_str:.0%}→{new_str:.0%}，"
+                       f"均本{avg_cost:.2f}，现价{price:.2f}")
             order_id = _place_order(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
@@ -466,7 +480,7 @@ def run_once(
 
         # Earnings blackout — no new positions within ±1 day of earnings
         if is_earnings_blackout(code):
-            alert.warn(f"runner: {code} EARNINGS BLACKOUT — skip")
+            alert.warn(f"{code} 处于财报窗口期，跳过开仓")
             continue
 
         # ── v2.1 横向多因子总分：趋势(40%)+基本面(20%)+新闻(20%)+天气(20%) ──
@@ -513,7 +527,9 @@ def run_once(
                     results=results, tracker=tracker, ktype=ktype, bars=bars,
                 )
             if victim_code is None:
-                alert.warn("runner: MAX_POSITIONS reached — skip new entries")
+                skip_price = result.get("current_price", 0.0)
+                alert.warn(f"持仓数已达上限，跳过 {code}"
+                           f"（现价{skip_price:.4f}，评分{total.total:.0f}/{total.label}）")
                 break
             # 置换成立，名额已腾出——不 break，直接往下走已有的敞口/板块/
             # sizing/BUY逻辑，就像这个名额本来就空着一样。
@@ -523,14 +539,14 @@ def run_once(
             break
         if not guard.check_sector_exposure(portfolio, code):
             sector = config.SECTOR_MAP.get(code, "other")
-            alert.warn(f"runner: {code} sector={sector} exposure "
-                       f"{portfolio.sector_exposure_pct(sector):.0%} "
-                       f">= {config.MAX_SECTOR_EXPOSURE_PCT:.0%} — skip")
+            alert.warn(f"{code} 所属板块({sector})仓位占比"
+                       f"{portfolio.sector_exposure_pct(sector):.0%}"
+                       f"已达上限{config.MAX_SECTOR_EXPOSURE_PCT:.0%}，跳过")
             continue
 
         price = result.get("current_price", 0.0)
         if price <= 0:
-            alert.warn(f"runner: {code} price unavailable — skip")
+            alert.warn(f"{code} 无法获取价格，跳过")
             continue
 
         # Resolve entry strategy before sizing (used by strategy cap lookup)
@@ -565,13 +581,13 @@ def run_once(
             score_label=total.label,
         )
         if qty <= 0:
-            alert.warn(f"runner: {code} qty=0 at price={price:.4f} — skip")
+            alert.warn(f"{code} 现价{price:.4f}下可买股数为0，跳过")
             continue
 
         entry_rank = buy_signals.index(ranked) + 1
-        alert.info(f"runner: BUY  {code}  qty={qty}  price={price:.4f}"
-                   f"  strength={result.get('signal_strength', 0):.0%}"
-                   f"  rank=#{entry_rank}")
+        alert.info(f"准备买入 {code}，{qty}股 @{price:.4f}，"
+                   f"信号强度{result.get('signal_strength', 0):.0%}，"
+                   f"排名#{entry_rank}")
         order_id = _place_order(
             code=code,
             side="BUY",
@@ -632,10 +648,9 @@ def run_once(
             if qqq_price > 0 and spend > qqq_price:
                 qty = int(spend / qqq_price)
                 if qty > 0:
-                    alert.info(f"runner: QQQ Beta floor buy  qty={qty}  "
-                               f"price={qqq_price:.2f}  "
-                               f"target={config.QQQ_CORE_TARGET_PCT:.0%}"
-                               f"  (above MA{config.QQQ_MA_PERIOD})")
+                    alert.info(f"QQQ底仓买入 {qty}股 @{qqq_price:.2f}"
+                               f"（目标仓位{config.QQQ_CORE_TARGET_PCT:.0%}，"
+                               f"站上MA{config.QQQ_MA_PERIOD}）")
                     order_id = _place_order(
                         code=config.QQQ_CORE_CODE, side="BUY",
                         qty=qty, price=qqq_price,
@@ -712,8 +727,9 @@ def run_loop(
     except Exception as exc:
         alert.log(f"trade_tracker: log_run_metadata failed — {exc}")
 
-    alert.info(f"runner: loop started  interval={interval_seconds}s  run_id={run_id}")
+    alert.info(f"kabu 监控已启动，每{interval_seconds // 60}分钟扫描一次")
     while True:
+        _write_heartbeat()
         try:
             run_once(
                 strategy_name=strategy_name,
@@ -726,19 +742,35 @@ def run_loop(
                 run_id=run_id,
             )
         except KeyboardInterrupt:
-            alert.info("runner: loop stopped by user")
+            alert.info("kabu 监控已手动停止")
             break
         except Exception as exc:
-            alert.error(f"runner: unhandled error in pass — {exc}")
+            alert.error(f"本轮扫描出现未处理异常 — {exc}")
 
         if should_notify_close():
-            alert.warn("runner: 美股收盘，停止扫描")
+            alert.warn("美股收盘，停止扫描")
 
         alert.log(f"runner: sleeping {interval_seconds}s …")
         time.sleep(interval_seconds)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
+_HEARTBEAT_PATH = Path(__file__).resolve().parent.parent / ".kabu_heartbeat"
+
+
+def _write_heartbeat() -> None:
+    """Timestamp written at the top of every run_loop() iteration — read by
+    the external watchdog.py to detect a hung process (one that's still
+    running but stopped making progress, e.g. blocked forever inside a
+    moomoo API call with no timeout). Written before run_once() rather than
+    after, so a pass that never returns leaves a stale-but-present timestamp
+    for the watchdog to compare against, instead of no file at all."""
+    try:
+        _HEARTBEAT_PATH.write_text(datetime.now().isoformat())
+    except OSError:
+        pass
+
 
 def _trade_id(code: str, entry_time_iso: str) -> str:
     """v2.6 Trade Intelligence Database round-trip key — must be derived the
@@ -858,19 +890,17 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
     victim_pos = held[victim_code]
     victim_price = results.get(victim_code, {}).get("current_price") or get_price(victim_code)
     if not victim_price or victim_price <= 0:
-        alert.warn(f"runner: ACTIVE_REPLACEMENT victim {victim_code} price unavailable — skip")
+        alert.warn(f"置换候选{victim_code}无法获取价格，本次置换取消")
         return None
 
-    alert.warn(f"runner: ACTIVE_REPLACEMENT  sell {victim_code} "
-               f"(score={victim_pos.get('total_score')})  "
-               f"to make room for incoming FULL signal (score={incoming_score})")
+    alert.warn(f"主动置换：卖出{victim_code}（评分{victim_pos.get('total_score')}）"
+               f"为新的满分信号（评分{incoming_score}）腾出仓位")
     order_id = _place_order(
         code=victim_code, side="SELL", qty=victim_pos["qty"], price=victim_price,
         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
     )
     if confirmed and not order_id:
-        alert.error(f"runner: ACTIVE_REPLACEMENT sell failed for {victim_code} "
-                    f"— aborting swap, position left untouched")
+        alert.error(f"主动置换卖出{victim_code}失败，置换取消，持仓保持不变")
         return None
     if confirmed and order_id:
         closed = portfolio.close_position(victim_code, victim_price, reason="ACTIVE_REPLACEMENT")
@@ -940,9 +970,10 @@ def _place_order(
         if ret == ft.RET_OK:
             order_id = str(data["order_id"].iloc[0])
         else:
-            alert.error(f"_place_order: {code} {side} failed — {data}")
+            side_cn = "买入" if side == "BUY" else "卖出"
+            alert.error(f"{code} {side_cn}下单失败 — {data}")
     except Exception as exc:
-        alert.error(f"_place_order: {code} exception — {exc}")
+        alert.error(f"{code} 下单时发生异常 — {exc}")
     finally:
         safe_close(trd_ctx)
 

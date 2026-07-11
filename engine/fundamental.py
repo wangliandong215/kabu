@@ -129,5 +129,5 @@ def _recent_downgrade(code: str) -> Optional[str]:
         finally:
             ctx.close()
     except Exception as exc:
-        alert.warn(f"fundamental: get_research_rating_summary error for {ticker} — {exc}")
+        alert.warn(f"{ticker} 基本面评级获取失败 — {exc}")
         return None
