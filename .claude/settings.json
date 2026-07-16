@@ -19,7 +19,10 @@
       "PowerShell(Unregister-ScheduledTask *)",
       "PowerShell(New-ScheduledTaskAction *)",
       "PowerShell(New-ScheduledTaskTrigger *)",
-      "PowerShell(New-ScheduledTaskSettingsSet *)"
+      "PowerShell(New-ScheduledTaskSettingsSet *)",
+      "PowerShell(python *)",
+      "PowerShell(python3 *)",
+      "PowerShell(taskkill *)"
     ]
   }
 }

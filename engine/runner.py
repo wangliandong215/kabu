@@ -480,7 +480,7 @@ def run_once(
 
         # Earnings blackout — no new positions within ±1 day of earnings
         if is_earnings_blackout(code):
-            alert.warn(f"{code} 处于财报窗口期，跳过开仓")
+            alert.warn_skip(code, f"{code} 处于财报窗口期，跳过开仓")
             continue
 
         # ── v2.1 横向多因子总分：趋势(40%)+基本面(20%)+新闻(20%)+天气(20%) ──
@@ -528,8 +528,8 @@ def run_once(
                 )
             if victim_code is None:
                 skip_price = result.get("current_price", 0.0)
-                alert.warn(f"持仓数已达上限，跳过 {code}"
-                           f"（现价{skip_price:.4f}，评分{total.total:.0f}/{total.label}）")
+                alert.warn_skip(code, f"持仓数已达上限，跳过 {code}"
+                                f"（现价{skip_price:.4f}，评分{total.total:.0f}/{total.label}）")
                 break
             # 置换成立，名额已腾出——不 break，直接往下走已有的敞口/板块/
             # sizing/BUY逻辑，就像这个名额本来就空着一样。
@@ -539,14 +539,14 @@ def run_once(
             break
         if not guard.check_sector_exposure(portfolio, code):
             sector = config.SECTOR_MAP.get(code, "other")
-            alert.warn(f"{code} 所属板块({sector})仓位占比"
-                       f"{portfolio.sector_exposure_pct(sector):.0%}"
-                       f"已达上限{config.MAX_SECTOR_EXPOSURE_PCT:.0%}，跳过")
+            alert.warn_skip(code, f"{code} 所属板块({sector})仓位占比"
+                            f"{portfolio.sector_exposure_pct(sector):.0%}"
+                            f"已达上限{config.MAX_SECTOR_EXPOSURE_PCT:.0%}，跳过")
             continue
 
         price = result.get("current_price", 0.0)
         if price <= 0:
-            alert.warn(f"{code} 无法获取价格，跳过")
+            alert.warn_skip(code, f"{code} 无法获取价格，跳过")
             continue
 
         # Resolve entry strategy before sizing (used by strategy cap lookup)
@@ -581,7 +581,7 @@ def run_once(
             score_label=total.label,
         )
         if qty <= 0:
-            alert.warn(f"{code} 现价{price:.4f}下可买股数为0，跳过")
+            alert.warn_skip(code, f"{code} 现价{price:.4f}下可买股数为0，跳过")
             continue
 
         entry_rank = buy_signals.index(ranked) + 1

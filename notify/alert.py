@@ -92,6 +92,23 @@ def log(msg: str) -> None:
     print(f"[{_ts()}] [LOG  ] {msg}")
 
 
+_skip_pushed_today: dict = {}  # code -> "YYYY-MM-DD" of last push
+
+
+def warn_skip(code: str, msg: str) -> None:
+    """Buy-signal skip notice: printed to console every scan pass, but pushed
+    to DingTalk/Telegram at most once per calendar day per stock code — a
+    persistent skip reason (capacity full, earnings blackout, sector limit,
+    ...) would otherwise repush every --interval scan (e.g. every 5 minutes)
+    for the same code."""
+    print(f"[{_ts()}] [WARN ] {msg}")
+    today = datetime.now().strftime("%Y-%m-%d")
+    if _skip_pushed_today.get(code) == today:
+        return
+    _skip_pushed_today[code] = today
+    _push_all(msg, prefix="")
+
+
 # ── Exit reason display mapping ───────────────────────────────────────────────
 
 _EXIT_REASON_LABELS = {
