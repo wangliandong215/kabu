@@ -40,7 +40,7 @@ from data import fetcher as _fetcher
 # numbers for any date range already covered; only genuinely new dates (the
 # tail beyond what's cached, or an earlier start not yet covered) hit OpenD.
 
-_CACHE_DIR = Path(r"I:\kabuData\backtest_cache")
+_CACHE_DIR = Path(r"C:\KabuData\backtest_cache")
 
 
 def _cache_path(code: str) -> Path:
