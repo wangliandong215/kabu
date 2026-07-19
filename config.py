@@ -904,6 +904,10 @@ MRD_ATR_PCT_CONFIDENCE_SCALE:   float = 0.02  # ATR% units from threshold needed
 MRD_CONFIDENCE_VOLUME_BONUS:    float = 10.0
 MRD_CONFIDENCE_VOLUME_PENALTY:  float = 10.0
 TELEGRAM_CHAT_ID:   str = os.getenv("KABU_TELEGRAM_CHAT_ID", "")
+# KABU_TELEGRAM_CHAT_ID accepts a comma-separated list to push to multiple
+# phones/recipients (e.g. "111111,222222"). TELEGRAM_CHAT_ID above stays as
+# the raw env value for backward compat; use TELEGRAM_CHAT_IDS for iteration.
+TELEGRAM_CHAT_IDS: list = [c.strip() for c in TELEGRAM_CHAT_ID.split(",") if c.strip()]
 
 # ── System version (v2.8) ────────────────────────────────────────────────────
 # Recorded into engine/trade_tracker.py's trades.strategy_version column —

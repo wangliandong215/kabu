@@ -1,7 +1,7 @@
 """
 notify/telegram_bot.py — two-way Telegram bot backed by the Claude API.
 
-Long-polls Telegram for messages from config.TELEGRAM_CHAT_ID only, forwards
+Long-polls Telegram for messages from config.TELEGRAM_CHAT_IDS only, forwards
 each one to Claude (with read-only tools for live portfolio/quote/analysis
 data), and replies with Claude's answer. Runs as a background thread inside
 main.py — separate from the trading loop, read-only, never places orders.
@@ -56,14 +56,14 @@ def _save_offset(offset: int) -> None:
         pass
 
 
-def _send_message(text: str) -> None:
+def _send_message(chat_id: str, text: str) -> None:
     url = _API_BASE.format(token=config.TELEGRAM_BOT_TOKEN, method="sendMessage")
     for i in range(0, len(text), 4000):
         chunk = text[i:i + 4000]
         try:
             requests.post(
                 url,
-                json={"chat_id": config.TELEGRAM_CHAT_ID, "text": chunk},
+                json={"chat_id": chat_id, "text": chunk},
                 timeout=10,
             )
         except Exception as e:
@@ -227,9 +227,10 @@ def _ask_claude(client, tools, user_text: str) -> str:
     return "\n".join(parts) if parts else "（没有文本回复）"
 
 
-def _handle_message(client, tools, text: str) -> None:
+def _handle_message(client, tools, chat_id: str, text: str) -> None:
     if text.strip() in ("/start", "/help"):
         _send_message(
+            chat_id,
             "kabu助手已上线。直接用中文提问就行，比如"
             "「持仓状况和理由」「US.NVDA现在技术面怎么样」「随便问点别的」。"
         )
@@ -239,7 +240,7 @@ def _handle_message(client, tools, text: str) -> None:
     except Exception as e:
         alert.log(f"telegram_bot: Claude call failed: {e}")
         reply = f"抱歉，调用Claude失败了：{e}"
-    _send_message(reply)
+    _send_message(chat_id, reply)
 
 
 def _run_loop() -> None:
@@ -263,9 +264,9 @@ def _run_loop() -> None:
             message = update.get("message") or {}
             chat_id = str(message.get("chat", {}).get("id", ""))
             text = message.get("text")
-            if not text or chat_id != str(config.TELEGRAM_CHAT_ID):
+            if not text or chat_id not in config.TELEGRAM_CHAT_IDS:
                 continue
-            _handle_message(client, tools, text)
+            _handle_message(client, tools, chat_id, text)
 
         if updates:
             _save_offset(offset)
@@ -273,7 +274,7 @@ def _run_loop() -> None:
 
 def start() -> None:
     """Spawn the polling loop as a daemon thread. No-op if not configured."""
-    if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+    if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_IDS:
         alert.log("telegram_bot: KABU_TELEGRAM_BOT_TOKEN/CHAT_ID not set, skipping")
         return
     try:

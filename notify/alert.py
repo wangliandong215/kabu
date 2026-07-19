@@ -63,18 +63,19 @@ def _push_dingtalk(msg: str, prefix: str = "[kabu] ") -> None:
 
 def _push_telegram(msg: str, prefix: str = "[kabu] ") -> None:
     token = getattr(config, "TELEGRAM_BOT_TOKEN", "")
-    chat_id = getattr(config, "TELEGRAM_CHAT_ID", "")
-    if not token or not chat_id:
+    chat_ids = getattr(config, "TELEGRAM_CHAT_IDS", [])
+    if not token or not chat_ids:
         return
-    try:
-        import requests
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": f"{prefix}{msg}"},
-            timeout=5,
-        )
-    except Exception:
-        pass
+    import requests
+    for chat_id in chat_ids:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": f"{prefix}{msg}"},
+                timeout=5,
+            )
+        except Exception:
+            pass
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
