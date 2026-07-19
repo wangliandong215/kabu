@@ -872,7 +872,7 @@ QQQ_CORE_TARGET_PCT:   float = 0.25   # 固定目标仓位占比，20%~30%区间
 QQQ_MA_PERIOD:         int   = 200    # 跌破即清仓（大趋势走坏），重新站上再买回
 
 # ── Data cache ────────────────────────────────────────────────────────────────
-CACHE_DIR:          str = os.path.join(os.path.expanduser("~"), ".kabu_cache")
+CACHE_DIR:          str = r"I:\kabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
 CACHE_TTL_INTRADAY: int = 300        # 5 min for 1m–60m bars
 

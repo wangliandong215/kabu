@@ -22,7 +22,7 @@ import numpy as np
 import config
 
 
-_DEFAULT_PATH = Path(__file__).parent / "positions.json"
+_DEFAULT_PATH = Path(r"I:\kabuData\portfolio\positions.json")
 
 # Module-level write lock: prevents concurrent saves from corrupting the JSON
 # when two passes overlap (e.g. slow network delays a previous run).
