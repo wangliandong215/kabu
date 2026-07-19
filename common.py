@@ -2,8 +2,10 @@
 kabu — moomoo quantitative trading
 Shared utilities: connection helpers, enum parsing, safe value extraction.
 """
+import functools
 import socket
 import sys
+import time
 from typing import Optional
 
 import config
@@ -80,3 +82,37 @@ def parse_trd_env():
     """Return TrdEnv based on config.TRD_ENV."""
     from moomoo import TrdEnv
     return TrdEnv.REAL if config.TRD_ENV == "REAL" else TrdEnv.SIMULATE
+
+
+def retry(attempts: int = None, delay: float = None, backoff: float = None,
+          exceptions=(Exception,)):
+    """Decorator: retry the wrapped function on exception, sleeping `delay`
+    seconds (multiplied by `backoff` after every failed attempt) before the
+    next try. Re-raises the last exception once `attempts` is exhausted.
+    Defaults come from config.API_RETRY_* so retry behavior is tunable
+    without touching call sites — meant for moomoo OpenD API calls, where a
+    transient network hiccup shouldn't fail a whole scan pass."""
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            n = attempts if attempts is not None else config.API_RETRY_ATTEMPTS
+            wait = delay if delay is not None else config.API_RETRY_DELAY_SECONDS
+            mult = backoff if backoff is not None else config.API_RETRY_BACKOFF
+            last_exc = None
+            for attempt in range(1, n + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except exceptions as exc:
+                    last_exc = exc
+                    if attempt == n:
+                        break
+                    import notify.alert as alert
+                    alert.log(
+                        f"{fn.__name__}: 第{attempt}/{n}次尝试失败（{exc}），"
+                        f"{wait:.0f}秒后重试"
+                    )
+                    time.sleep(wait)
+                    wait *= mult
+            raise last_exc
+        return wrapper
+    return decorator

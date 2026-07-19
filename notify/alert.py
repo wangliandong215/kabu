@@ -5,9 +5,17 @@ Set env var KABU_DINGTALK_WEBHOOK (or config.DINGTALK_WEBHOOK) to receive
 DingTalk alerts. Set KABU_TELEGRAM_BOT_TOKEN + KABU_TELEGRAM_CHAT_ID (or
 config.TELEGRAM_BOT_TOKEN / config.TELEGRAM_CHAT_ID) to receive Telegram
 alerts. All messages are always printed to stdout regardless.
+
+Every message (including console-only log()/warn_skip() traffic) is also
+written to a rotating file under config.LOG_DIR — the terminal/Telegram
+history disappears when a console closes or a phone notification scrolls
+away, but the file survives a reboot so past runs stay traceable.
 """
+import logging
+import logging.handlers
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import config
 
@@ -20,6 +28,28 @@ try:
 except (AttributeError, ValueError):
     pass
 
+_logger = logging.getLogger("kabu")
+_logger.setLevel(logging.INFO)
+_logger.propagate = False
+if not _logger.handlers:   # guard against duplicate handlers on module reload
+    try:
+        log_dir = Path(config.LOG_DIR)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        _handler = logging.handlers.RotatingFileHandler(
+            log_dir / "kabu.log",
+            maxBytes=config.LOG_MAX_BYTES,
+            backupCount=config.LOG_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        _handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)-5s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        ))
+        _logger.addHandler(_handler)
+    except OSError:
+        pass   # best-effort — console/push still work if the log file can't be created
+
+_LEVEL_MAP = {"INFO": logging.INFO, "WARN": logging.WARNING, "ERROR": logging.ERROR}
+
 
 def _ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
@@ -29,6 +59,7 @@ def _emit(level: str, msg: str) -> None:
     # Console keeps the [LEVEL] tag for grepping log files; the phone push
     # drops [kabu]/[LEVEL] since msg is plain Chinese and self-explanatory.
     print(f"[{_ts()}] [{level:5s}] {msg}")
+    _logger.log(_LEVEL_MAP.get(level, logging.INFO), msg)
     _push_all(msg, prefix="")
 
 
@@ -43,6 +74,7 @@ def push_raw(msg: str) -> None:
     standard console-log-style formatting (e.g. watchdog.py, whose alerts
     are already self-explanatory without extra tagging)."""
     print(f"[{_ts()}] {msg}")
+    _logger.info(msg)
     _push_all(msg, prefix="")
 
 
@@ -86,11 +118,13 @@ def error(msg: str) -> None: _emit("ERROR", msg)
 
 
 def log(msg: str) -> None:
-    """Console-only diagnostic/progress message — never pushed to DingTalk/Telegram.
+    """Diagnostic/progress message — never pushed to DingTalk/Telegram, but
+    still written to the log file (see module docstring) for traceability.
     Use for per-stock scan/routing chatter and routine status that isn't an
     actionable trading event (use info/warn/error for anything that should
     reach the phone)."""
     print(f"[{_ts()}] [LOG  ] {msg}")
+    _logger.info(msg)
 
 
 _skip_pushed_today: dict = {}  # code -> "YYYY-MM-DD" of last push
@@ -103,6 +137,7 @@ def warn_skip(code: str, msg: str) -> None:
     ...) would otherwise repush every --interval scan (e.g. every 5 minutes)
     for the same code."""
     print(f"[{_ts()}] [WARN ] {msg}")
+    _logger.warning(msg)
     today = datetime.now().strftime("%Y-%m-%d")
     if _skip_pushed_today.get(code) == today:
         return
@@ -155,6 +190,7 @@ def trade_buy(code: str, price: float, qty: int, sector: str,
         f"🕒 成交时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}  [{env}]"
     )
     print(msg)
+    _logger.info(msg.replace("\n", " | "))
     _push_all(msg)
 
 
@@ -183,4 +219,5 @@ def trade_sell(code: str, entry_price: float, exit_price: float, qty: int,
         f"🕒 成交时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}  [{env}]"
     )
     print(msg)
+    _logger.info(msg.replace("\n", " | "))
     _push_all(msg)

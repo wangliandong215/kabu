@@ -116,6 +116,7 @@ def get_price(code: str) -> float:
 
 # ── Internal fetch ────────────────────────────────────────────────────────────
 
+@common.retry()
 def _fetch_from_opend(code: str, ktype: str) -> pd.DataFrame:
     from moomoo import AuType, RET_OK
 

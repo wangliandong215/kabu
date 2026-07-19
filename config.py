@@ -872,9 +872,23 @@ QQQ_CORE_TARGET_PCT:   float = 0.25   # 固定目标仓位占比，20%~30%区间
 QQQ_MA_PERIOD:         int   = 200    # 跌破即清仓（大趋势走坏），重新站上再买回
 
 # ── Data cache ────────────────────────────────────────────────────────────────
-CACHE_DIR:          str = r"I:\kabuData\live_cache"
+CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
 CACHE_TTL_INTRADAY: int = 300        # 5 min for 1m–60m bars
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+# All notify/alert.py messages (console + Telegram/DingTalk) are also written
+# here so operational history survives a closed terminal / server reboot.
+LOG_DIR:          str = r"C:\KabuData\logs"
+LOG_MAX_BYTES:    int = 10 * 1024 * 1024  # rotate after 10 MB
+LOG_BACKUP_COUNT: int = 5                 # keep 5 rotated files (~50 MB total)
+
+# ── API retry ─────────────────────────────────────────────────────────────────
+# Applied to moomoo OpenD data calls (see common.retry / data/fetcher.py) so a
+# transient network/API hiccup doesn't fail a whole scan pass.
+API_RETRY_ATTEMPTS:      int   = 3
+API_RETRY_DELAY_SECONDS: float = 2.0
+API_RETRY_BACKOFF:       float = 2.0   # delay *= this after each failed attempt
 
 # ── Notifications ─────────────────────────────────────────────────────────────
 # Set env var KABU_DINGTALK_WEBHOOK to receive DingTalk alerts.
