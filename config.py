@@ -12,6 +12,14 @@ TRD_ENV:    str  = os.getenv("FUTU_TRD_ENV",       "SIMULATE").upper()
 SECURITY_FIRM: str = os.getenv("FUTU_SECURITY_FIRM", "FUTUSECURITIES").upper()
 ACC_ID:     int  = int(os.getenv("FUTU_ACC_ID",    "0"))
 
+# OpenD gateway is set to auto-login, so watchdog.py can kill and relaunch
+# the exe with no credentials to re-enter when it detects a hang (see
+# watchdog.py's _restart_opend()).
+OPEND_EXE_PATH: str = os.getenv(
+    "OPEND_EXE_PATH",
+    r"C:\Users\Administrator\AppData\Roaming\moomoo_OpenD\moomoo_OpenD.exe",
+)
+
 # ── Watchlist ─────────────────────────────────────────────────────────────────
 # Split into two regions per user request (2026-07-03). WATCHLIST itself stays
 # a flat list (many call sites — backtest_portfolio.py, runner.py, etc. —
@@ -286,6 +294,24 @@ WATCHLIST: list = WATCHLIST_EUROPE_US + WATCHLIST_ASIA_PACIFIC
 
 # ── Capital ───────────────────────────────────────────────────────────────────
 INITIAL_CAPITAL: float = 1_000_522.45  # total account capital (USD) — matches real SIMULATE balance queried 2026-07-06
+
+# ── JP Paper Trading（v2.9）──────────────────────────────────────────────────
+# moomoo 目前不支持日股自动下单（common.py::make_trade_ctx() 的 market_map
+# 没有"JP"项，下单会落到TrdMarket.NONE），所以日股改走engine/broker.py的
+# PaperBroker——不调用券商API，只是内部模拟成交，走一套完全独立于美股实盘
+# 的虚拟资金/持仓账本（见engine/runner.py::run_once()里的is_jp_pass分支）。
+# 虚拟本金跟美股实盘用同一个数字，这样两边的position_pct/仓位占比可以直接
+# 拿来一起做统计/训练，不用换算单位。
+JP_PAPER_INITIAL_CAPITAL: float = INITIAL_CAPITAL
+JP_PAPER_POSITIONS_PATH:  str   = r"C:\KabuData\portfolio\positions_jp_paper.json"
+
+# 2026-07-21起：moomoo账号的日股行情权限拉不到数据（get_market_snapshot/
+# fetch_kline对所有JP代码返回"无权限获取行情"），OpenD重启后也没恢复，
+# 需要人工在moomoo客户端确认/重新登录后才能查。权限问题解决前，
+# engine/runner.py::select_watchlist()在JP盘中时段直接跳过整个
+# WATCHLIST_ASIA_PACIFIC池（返回空列表），不再尝试扫描——避免每5分钟
+# 刷一屏"无权限"报错。权限恢复后把这个改回True即可，不用改别的代码。
+JP_TRADING_ENABLED: bool = False
 
 # ── Risk management ───────────────────────────────────────────────────────────
 MAX_POSITIONS:          int   = 10    # max simultaneous open positions (active signals only, excl. QQQ core)

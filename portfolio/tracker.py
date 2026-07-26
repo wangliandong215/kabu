@@ -32,8 +32,9 @@ _write_lock = threading.Lock()
 
 class Portfolio:
 
-    def __init__(self, path: Path = None):
+    def __init__(self, path: Path = None, initial_cash: float = None):
         self.path = Path(path or _DEFAULT_PATH)
+        self._initial_cash = initial_cash if initial_cash is not None else config.INITIAL_CAPITAL
         self.data = self._load()
 
     # ── Persistence ───────────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ class Portfolio:
                     data = json.load(f)
                 # Back-fill fields added in later versions
                 data.setdefault("realized_pnl", 0.0)
-                data.setdefault("peak_equity",  data.get("initial_cash", config.INITIAL_CAPITAL))
+                data.setdefault("peak_equity",  data.get("initial_cash", self._initial_cash))
                 data.setdefault("cooldowns",    {})   # code -> ISO date string, blocked through this date
                 for pos in data.get("positions", {}).values():
                     pos.setdefault("avg_cost",          pos["entry_price"])
@@ -62,9 +63,9 @@ class Portfolio:
         return {
             "positions":    {},
             "peak_value":   0.0,
-            "initial_cash": config.INITIAL_CAPITAL,
+            "initial_cash": self._initial_cash,
             "realized_pnl": 0.0,
-            "peak_equity":  config.INITIAL_CAPITAL,
+            "peak_equity":  self._initial_cash,
             "cooldowns":    {},   # code -> ISO date string, blocked through this date
         }
 

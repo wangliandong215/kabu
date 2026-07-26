@@ -129,7 +129,9 @@ CREATE TABLE IF NOT EXISTS trades (
     commission       REAL,
     slippage         REAL,
     mfe              REAL,
-    mae              REAL
+    mae              REAL,
+    market           TEXT,
+    execution        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS trade_attribution (
@@ -217,6 +219,7 @@ class TradeTracker:
                 ("confidence_score", "REAL"), ("risk_per_trade", "REAL"),
                 ("commission", "REAL"), ("slippage", "REAL"),
                 ("mfe", "REAL"), ("mae", "REAL"),
+                ("market", "TEXT"), ("execution", "TEXT"),
             ],
         }
         for table, columns in expected.items():
@@ -247,10 +250,18 @@ class TradeTracker:
                   confidence_score: Optional[float] = None,
                   risk_per_trade: Optional[float] = None,
                   commission: Optional[float] = None,
-                  slippage: Optional[float] = None) -> None:
+                  slippage: Optional[float] = None,
+                  market: Optional[str] = None,
+                  execution: Optional[str] = None) -> None:
         """Record a new round-trip trade's open leg. All v2.8 kwargs
         (run_id..slippage) are optional and default to None — existing
-        call sites that don't pass them are unaffected."""
+        call sites that don't pass them are unaffected.
+
+        market/execution (v2.9): the security's home market (e.g. "US",
+        "JP") and how the fill was actually executed ("REAL" via moomoo,
+        "PAPER" via engine/broker.py's PaperBroker — see its module
+        docstring). Lets analytics/training filter real vs. paper trades
+        via query_trades(execution=...) without mixing the two."""
         ts = timestamp or datetime.now().isoformat()
         ctx = regime_ctx or {}
         with _write_lock:
@@ -260,12 +271,13 @@ class TradeTracker:
                     entry_time, entry_price, shares, position_value, position_pct,
                     cash_before, equity_before, run_id, atr_entry, sector,
                     market_environment, entry_rank, confidence_score,
-                    risk_per_trade, commission, slippage
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    risk_per_trade, commission, slippage, market, execution
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (trade_id, ticker, strategy_name, strategy_version, direction,
                  ts, price, shares, position_value, position_pct, cash, equity,
                  run_id, atr_entry, sector, market_environment, entry_rank,
-                 confidence_score, risk_per_trade, commission, slippage),
+                 confidence_score, risk_per_trade, commission, slippage,
+                 market, execution),
             )
             self._conn.execute(
                 """INSERT INTO trade_events
@@ -483,6 +495,19 @@ class TradeTracker:
                 f"must be one of {sorted(self._EXPORTABLE_TABLES)}")
         df = pd.read_sql_query(f"SELECT * FROM {table}", self._conn)
         df.to_csv(path, index=False)
+
+    def query_trades(self, execution: Optional[str] = None) -> pd.DataFrame:
+        """v2.9 — return the trades table, optionally filtered to one
+        execution kind ("REAL" or "PAPER"). None (default) returns every
+        row, real and paper mixed — pass execution="REAL"/"PAPER" for
+        analytics/training that needs the two kept apart (e.g. Confidence
+        Score training via train_on_real/train_on_paper switches)."""
+        if execution is None:
+            return pd.read_sql_query("SELECT * FROM trades", self._conn)
+        return pd.read_sql_query(
+            "SELECT * FROM trades WHERE execution=?", self._conn,
+            params=(execution,),
+        )
 
 
 # ── Shared helper: OHLCV DataFrame -> regime_ctx dict ─────────────────────────

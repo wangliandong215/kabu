@@ -18,8 +18,9 @@ from typing import List, Optional
 
 import config
 import notify.alert as alert
-from common import make_trade_ctx, safe_close, infer_market, parse_trd_env
+from common import infer_market, parse_trd_env
 from data.fetcher import get_price
+from engine.broker import get_broker
 from engine.scanner import scan, smart_scan, rank_signals
 from engine import news as news_sentiment
 from engine import news_filter
@@ -27,7 +28,7 @@ from engine import fundamental
 from engine import scoring
 from engine import regime
 from engine import market_weather
-from engine.market_hours import filter_open, should_notify_close, is_daytime_jst
+from engine.market_hours import filter_open, should_notify_close, should_notify_open, is_daytime_jst
 from risk.earnings import is_earnings_blackout
 from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
@@ -44,8 +45,17 @@ def select_watchlist() -> List[str]:
     WATCHLIST_EUROPE_US. Re-evaluated on every run_once() call so a
     long-running loop naturally switches pools as the day/night boundary
     is crossed, instead of freezing whichever pool was current at
-    process launch."""
-    return config.WATCHLIST_ASIA_PACIFIC if is_daytime_jst() else config.WATCHLIST_EUROPE_US
+    process launch.
+
+    config.JP_TRADING_ENABLED=False (set 2026-07-21, moomoo JP quote
+    permission outage) skips the JP pool entirely during JP hours instead
+    of returning it — see config.py comment for how to re-enable."""
+    if not is_daytime_jst():
+        return config.WATCHLIST_EUROPE_US
+    if not config.JP_TRADING_ENABLED:
+        alert.log("runner: JP trading disabled (config.JP_TRADING_ENABLED=False) — skipping JP session")
+        return []
+    return config.WATCHLIST_ASIA_PACIFIC
 
 
 def run_once(
@@ -82,8 +92,32 @@ def run_once(
     if run_id is None:
         run_id = uuid.uuid4().hex
 
+    watchlist = codes or select_watchlist()
+
+    # Filter to markets currently open (prevents dead scans on closed exchanges)
+    open_codes = filter_open(watchlist)
+    skipped = len(watchlist) - len(open_codes)
+    if skipped:
+        alert.log(f"runner: {skipped} code(s) skipped — market closed")
+    if not open_codes:
+        alert.log("runner: no markets open — pass skipped")
+        return
+
+    # ── JP Paper Trading (v2.9) ───────────────────────────────────────────────
+    # moomoo doesn't support real JP order execution today (see
+    # engine/broker.py docstring) — a pass scanning only JP codes runs the
+    # exact same pipeline against a separate virtual capital pool / position
+    # file instead, via engine.broker.PaperBroker (resolved per-code inside
+    # _place_order()). Mixed JP + non-JP watchlists (only possible via a
+    # manual --codes override) are treated as a real/non-JP pass — not
+    # supported in v1, see config.py JP_PAPER_* comment.
+    is_jp_pass = bool(open_codes) and all(infer_market(c) == "JP" for c in open_codes)
+
     # ── Determine trade environment ───────────────────────────────────────────
-    if use_real and confirmed:
+    if is_jp_pass:
+        env_label = "JP-PAPER"
+        trd_env = None   # PaperBroker never reads trd_env
+    elif use_real and confirmed:
         trd_env = parse_trd_env(config.TRD_ENV)
         env_label = config.TRD_ENV
     else:
@@ -92,15 +126,20 @@ def run_once(
         env_label = "SIMULATE"
 
     # v2.1 多因子总分模型的 env 参数（engine.fundamental / engine.scoring）：
-    # 只有 SIMULATE(模拟盘)/真实两档，backtest_portfolio.py 是完全独立的脚本
-    # 入口，走的是 env="backtest"，不会经过这里。
-    score_env = "paper" if env_label == "SIMULATE" else "live"
+    # SIMULATE/JP-PAPER 都不是真实资金，同样按 paper 处理。
+    # backtest_portfolio.py 是完全独立的脚本入口，走的是 env="backtest"，
+    # 不会经过这里。
+    score_env = "paper" if env_label in ("SIMULATE", "JP-PAPER") else "live"
 
     mode_label = "AUTO-ROUTE" if auto_route else strategy_name
     alert.log(f"runner: starting pass  env={env_label}  mode={mode_label}"
               f"  dry_run={not confirmed}")
 
-    portfolio = Portfolio()
+    if is_jp_pass:
+        portfolio = Portfolio(path=config.JP_PAPER_POSITIONS_PATH,
+                              initial_cash=config.JP_PAPER_INITIAL_CAPITAL)
+    else:
+        portfolio = Portfolio()
     try:
         tracker = TradeTracker()   # v2.6 Trade Intelligence Database — side-effect-only
     except Exception as exc:
@@ -119,17 +158,6 @@ def run_once(
     drawdown_halt = not guard.check_max_drawdown(portfolio)
     if drawdown_halt:
         alert.warn("触发最大回撤熔断，本轮禁止新开仓（已持仓位仍正常检查退出）")
-
-    watchlist = codes or select_watchlist()
-
-    # Filter to markets currently open (prevents dead scans on closed exchanges)
-    open_codes = filter_open(watchlist)
-    skipped = len(watchlist) - len(open_codes)
-    if skipped:
-        alert.log(f"runner: {skipped} code(s) skipped — market closed")
-    if not open_codes:
-        alert.log("runner: no markets open — pass skipped")
-        return
 
     if auto_route:
         results = smart_scan(open_codes, ktype=ktype, bars=bars)
@@ -632,15 +660,18 @@ def run_once(
                         sector=config.SECTOR_MAP.get(code, "other"),
                         market_environment=weather_code, entry_rank=entry_rank,
                         risk_per_trade=config.RISK_PER_TRADE_PCT,
+                        market=infer_market(code),
+                        execution="PAPER" if is_jp_pass else "REAL",
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_entry failed {code} — {exc}")
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，只要不在持有中且 QQQ>MA200 就买回 ──
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
-    qqq_held = portfolio.get_position(config.QQQ_CORE_CODE) is not None
+    # JP Paper pass 跳过这一段——用JP虚拟资金买US.QQQ底仓没有意义。
+    qqq_held = not is_jp_pass and portfolio.get_position(config.QQQ_CORE_CODE) is not None
 
-    if not qqq_held and not macro_block:
+    if not is_jp_pass and not qqq_held and not macro_block:
         if _qqq_above_ma():
             qqq_price = get_price(config.QQQ_CORE_CODE)
             target_value = config.QQQ_CORE_TARGET_PCT * portfolio.total_capital()
@@ -688,6 +719,7 @@ def run_once(
                                         config.QQQ_CORE_CODE, ktype, bars),
                                     run_id=run_id, sector="etf",
                                     market_environment=weather_code,
+                                    market="US", execution="REAL",
                                 )
                             except Exception as exc:
                                 alert.log(f"trade_tracker: log_entry failed "
@@ -747,6 +779,8 @@ def run_loop(
         except Exception as exc:
             alert.error(f"本轮扫描出现未处理异常 — {exc}")
 
+        if should_notify_open():
+            alert.info("美股开盘，开始扫描")
         if should_notify_close():
             alert.warn("美股收盘，停止扫描")
 
@@ -938,43 +972,13 @@ def _place_order(
     confirmed: bool,
 ) -> str:
     """
-    Place a market-price order.  Returns order_id string on success, "" on dry
-    run or failure.
-
-    Dry-run mode (confirmed=False): logs intent only, never touches the broker.
+    Place an order via whichever broker engine.broker.get_broker(code)
+    resolves for this code (real moomoo order for US/EU codes, virtual
+    paper fill for JP codes — see engine/broker.py). Returns order_id
+    string on success, "" on dry run or failure.
     """
-    if not confirmed:
-        alert.log(f"[DRY RUN] would {side} {qty}×{code} @ {price:.4f}")
-        return ""
-
-    import moomoo as ft
-
-    market = infer_market(code)
-    # moomoo 要求美股价格精确到分（最小 tick = $0.01）
-    if code.startswith("US."):
-        price = round(price, 2)
-    trd_ctx = make_trade_ctx(market)
-    order_id = ""
-    try:
-        order_type = ft.OrderType.NORMAL
-        trd_side = ft.TrdSide.BUY if side == "BUY" else ft.TrdSide.SELL
-
-        ret, data = trd_ctx.place_order(
-            price=price,
-            qty=qty,
-            code=code,
-            trd_side=trd_side,
-            order_type=order_type,
-            trd_env=trd_env,
-        )
-        if ret == ft.RET_OK:
-            order_id = str(data["order_id"].iloc[0])
-        else:
-            side_cn = "买入" if side == "BUY" else "卖出"
-            alert.error(f"{code} {side_cn}下单失败 — {data}")
-    except Exception as exc:
-        alert.error(f"{code} 下单时发生异常 — {exc}")
-    finally:
-        safe_close(trd_ctx)
-
-    return order_id
+    broker = get_broker(code)
+    return broker.place_order(
+        code=code, side=side, qty=qty, price=price,
+        trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+    )

@@ -15,6 +15,14 @@ portfolio/positions.json
 # Single-instance lock for main.py (runtime data, holds current PID)
 .kabu_loop.lock
 
+# watchdog.py heartbeat timestamp (runtime data, rewritten every run_loop
+# iteration — see engine/runner.py)
+.kabu_heartbeat
+
+# Broker order audit trail (runtime data, accumulates over time; see
+# engine/broker.py)
+trade_audit.jsonl
+
 # v2.6 Trade Intelligence Database (runtime data — accumulates real trade
 # history, not source; see engine/trade_tracker.py)
 engine/trade_history.db

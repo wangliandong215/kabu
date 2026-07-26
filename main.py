@@ -49,6 +49,13 @@ _LOCK_PATH = Path(__file__).resolve().parent / ".kabu_loop.lock"
 
 
 def _is_pid_running(pid: int) -> bool:
+    """True if `pid` is a live python.exe/pythonw.exe process. On Windows,
+    checking PID existence alone is fooled by PID reuse — a dead old
+    instance's PID can get recycled onto an unrelated process within
+    seconds on a busy server, which caused a false "already running" lock
+    rejection and ~11h of trading downtime on 2026-07-21. Verifying the
+    image name closes that hole (still not airtight against another
+    python.exe reusing the PID, but narrows it enormously)."""
     if sys.platform != "win32":
         try:
             os.kill(pid, 0)
@@ -57,10 +64,16 @@ def _is_pid_running(pid: int) -> bool:
             return False
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if handle:
+    if not handle:
+        return False
+    try:
+        buf = ctypes.create_unicode_buffer(260)
+        size = ctypes.c_uint(260)
+        if not ctypes.windll.kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+            return False
+        return Path(buf.value).name.lower() in ("python.exe", "pythonw.exe")
+    finally:
         ctypes.windll.kernel32.CloseHandle(handle)
-        return True
-    return False
 
 
 def _acquire_single_instance_lock() -> None:
