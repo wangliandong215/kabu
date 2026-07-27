@@ -15,12 +15,13 @@ from typing import Dict, List, Optional
 
 import config
 import notify.alert as alert
-from data.fetcher import fetch_kline, get_price
+from data_provider.provider_factory import get_provider
 from engine import router as regime_router
 from engine.indicators import rsi_last
 from strategies import get_strategy
 
 _REQUEST_DELAY = 0.8  # seconds between API calls — moomoo limit: 60 req/30s
+_provider = get_provider(config.MARKET)
 
 
 def _strip_live_bar(df, ktype: str, code: str):
@@ -61,7 +62,7 @@ def scan(
 
     for i, code in enumerate(codes, 1):
         try:
-            df = fetch_kline(code, ktype=ktype, bars=bars)
+            df = _provider.get_history(code, interval=ktype, limit=bars)
             if df is None or len(df) < strategy.required_bars:
                 alert.log(
                     f"scan [{i}/{total}]: {code} too few bars "
@@ -78,7 +79,7 @@ def scan(
                 continue
 
             result = strategy.full_result(df_confirmed)
-            price = get_price(code)
+            price = _provider.get_latest_price(code)
             result["current_price"] = price
             result["rsi14"] = rsi_last(df_confirmed["close"].astype(float))
             results[code] = result
@@ -115,7 +116,7 @@ def smart_scan(
 
     for i, code in enumerate(codes, 1):
         try:
-            df = fetch_kline(code, ktype=ktype, bars=bars)
+            df = _provider.get_history(code, interval=ktype, limit=bars)
             if df is None or len(df) < 30:
                 alert.log(f"smart_scan [{i}/{total}]: {code} too few bars, skipped")
                 continue
@@ -137,7 +138,7 @@ def smart_scan(
                     "signal": "HOLD", "signal_strength": 0.0,
                     "regime": regime, "strategy_used": None,
                     "detail": f"Regime={regime_label(regime)} — no long entry",
-                    "current_price": get_price(code),
+                    "current_price": _provider.get_latest_price(code),
                 }
                 continue
 
@@ -150,7 +151,7 @@ def smart_scan(
                 continue
 
             result = strategy.full_result(df_confirmed)
-            price  = get_price(code)
+            price  = _provider.get_latest_price(code)
             result["current_price"]  = price
             result["regime"]         = regime
             result["strategy_used"]  = strategy_name

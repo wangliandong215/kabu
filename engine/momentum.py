@@ -18,8 +18,11 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 import pandas as pd
 
+import config
 import notify.alert as alert
-from data.fetcher import fetch_kline
+from data_provider.provider_factory import get_provider
+
+_provider = get_provider(config.MARKET)
 
 
 # ── Live scoring ──────────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ def compute_momentum(
     for i, code in enumerate(codes, 1):
         try:
             bars_needed = lookback_days + skip_days + 5
-            df = fetch_kline(code, ktype=ktype, bars=bars_needed)
+            df = _provider.get_history(code, interval=ktype, limit=bars_needed)
             if df is None or len(df) < lookback_days + skip_days:
                 continue
 
@@ -136,7 +139,7 @@ def run_backtest_momentum(
     close_map: Dict[str, pd.Series] = {}
     for i, code in enumerate(codes, 1):
         try:
-            df = fetch_kline(code, ktype=ktype, bars=bars)
+            df = _provider.get_history(code, interval=ktype, limit=bars)
             if df is not None and len(df) >= lookback_days + skip_days + hold_days:
                 close_map[code] = df["close"].astype(float).reset_index(drop=True)
                 print(f"  [{i}/{len(codes)}] {code} ok ({len(df)} bars)")

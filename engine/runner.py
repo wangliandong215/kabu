@@ -19,7 +19,7 @@ from typing import List, Optional
 import config
 import notify.alert as alert
 from common import make_trade_ctx, safe_close, infer_market, parse_trd_env
-from data.fetcher import get_price
+from data_provider.provider_factory import get_provider
 from engine.scanner import scan, smart_scan, rank_signals
 from engine import news as news_sentiment
 from engine import news_filter
@@ -35,6 +35,8 @@ from risk import guard, sizing
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash)
+
+_provider = get_provider(config.MARKET)
 
 
 def select_watchlist() -> List[str]:
@@ -147,7 +149,7 @@ def run_once(
     #   4. Mean-reversion SELL (%B flip, etc.) — lowest priority
     for code, pos in list(portfolio.data["positions"].items()):
         result       = results.get(code, {})
-        price        = result.get("current_price") or get_price(code)
+        price        = result.get("current_price") or _provider.get_latest_price(code)
         entry_strat  = pos.get("strategy", strategy_name)
 
         if price <= 0:
@@ -215,9 +217,8 @@ def run_once(
         entry_result = result if result.get("strategy_used") == entry_strat else {}
         if not entry_result and entry_strat:
             try:
-                from data.fetcher import fetch_kline
                 from strategies import get_strategy as _get
-                df_exit = fetch_kline(code, ktype=ktype, bars=bars)
+                df_exit = _provider.get_history(code, interval=ktype, limit=bars)
                 if df_exit is not None:
                     entry_result = _get(entry_strat).full_result(df_exit)
             except Exception:
@@ -295,10 +296,9 @@ def run_once(
     # already fired.
     weather_code = 1   # safe/cautious default if the fetch or compute fails
     try:
-        from data.fetcher import fetch_kline
         bars_needed = max(config.QQQ_MA_PERIOD,
                           regime._MACRO_HALT_MA_PERIOD + regime._MACRO_HALT_SLOPE_LOOKBACK) + 5
-        qqq_df = fetch_kline(config.QQQ_CORE_CODE, ktype="K_DAY", bars=bars_needed)
+        qqq_df = _provider.get_history(config.QQQ_CORE_CODE, interval="K_DAY", limit=bars_needed)
 
         if not macro_block and regime.qqq_macro_halt(qqq_df):
             macro_block = f"QQQ_TECHNICAL_HALT: below MA{config.QQQ_MA_PERIOD} + steep MA{regime._MACRO_HALT_MA_PERIOD} downslope"
@@ -333,7 +333,7 @@ def run_once(
             if result.get("regime") != "TRENDING_UP":
                 continue
 
-            price = result.get("current_price") or get_price(code)
+            price = result.get("current_price") or _provider.get_latest_price(code)
             if price <= 0:
                 continue
             strength = result.get("signal_strength", pos.get("signal_strength", 0.5))
@@ -642,7 +642,7 @@ def run_once(
 
     if not qqq_held and not macro_block:
         if _qqq_above_ma():
-            qqq_price = get_price(config.QQQ_CORE_CODE)
+            qqq_price = _provider.get_latest_price(config.QQQ_CORE_CODE)
             target_value = config.QQQ_CORE_TARGET_PCT * portfolio.total_capital()
             spend        = min(portfolio.available_cash() * 0.98, target_value)
             if qqq_price > 0 and spend > qqq_price:
@@ -794,8 +794,7 @@ def _trade_regime_ctx(code: str, ktype: str = "K_DAY", bars: int = 120):
         ctx = build_regime_ctx_preferring_hmm(code)
         if ctx is not None:
             return ctx
-        from data.fetcher import fetch_kline
-        df = fetch_kline(code, ktype=ktype, bars=bars)
+        df = _provider.get_history(code, interval=ktype, limit=bars)
         return build_regime_ctx_preferring_hmm(code, df)
     except Exception:
         return None
@@ -808,9 +807,8 @@ def _qqq_above_ma() -> bool:
     Used both to decide whether to buy the floor back and whether to exit it.
     """
     try:
-        from data.fetcher import fetch_kline
-        qqq_df = fetch_kline(config.QQQ_CORE_CODE, ktype="K_DAY",
-                             bars=config.QQQ_MA_PERIOD + 5)
+        qqq_df = _provider.get_history(config.QQQ_CORE_CODE, interval="K_DAY",
+                                        limit=config.QQQ_MA_PERIOD + 5)
         qqq_close = qqq_df["close"].astype(float)
         return float(qqq_close.iloc[-1]) > float(qqq_close.tail(config.QQQ_MA_PERIOD).mean())
     except Exception:
@@ -888,7 +886,7 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
     victim_code = evaluation.victim_code
 
     victim_pos = held[victim_code]
-    victim_price = results.get(victim_code, {}).get("current_price") or get_price(victim_code)
+    victim_price = results.get(victim_code, {}).get("current_price") or _provider.get_latest_price(victim_code)
     if not victim_price or victim_price <= 0:
         alert.warn(f"置换候选{victim_code}无法获取价格，本次置换取消")
         return None

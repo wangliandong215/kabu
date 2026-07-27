@@ -54,8 +54,11 @@ import pandas as pd
 from hmmlearn.hmm import GaussianHMM
 from sklearn.preprocessing import StandardScaler
 
-import backtest
+import config
+from data_provider.provider_factory import get_provider
 from engine.market_regime import Regime, RegimeClassifier, REGIME_NAMES
+
+_provider = get_provider(config.MARKET)
 
 HMM_N_STATES = 4
 HMM_RANDOM_STATE = 42
@@ -202,7 +205,7 @@ def train_stock_hmm(code: str, start: str = "2015-01-01", end: str = None) -> di
     one bad ticker abort a batch.
     """
     end = end or pd.Timestamp.today().strftime("%Y-%m-%d")
-    raw = backtest.fetch_kline(code, start, end)
+    raw = _provider.get_history(code, start=start, end=end)
     if raw.empty:
         raise ValueError(f"{code}: no data returned for [{start}, {end}]")
 

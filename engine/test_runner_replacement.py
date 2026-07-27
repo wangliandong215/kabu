@@ -6,9 +6,11 @@ live/paper-trading pipeline.
 Rather than mocking the entire run_once() pipeline (500+ lines, depends on
 live quotes/news/fundamentals), these tests exercise the extracted
 _attempt_active_replacement() function directly against a real Portfolio
-backed by a temp JSON file, with only _place_order/get_price monkeypatched
-(matching the module-level `from data.fetcher import get_price` /
-module-local `_place_order` functions runner.py actually calls).
+backed by a temp JSON file, with only _place_order/get_price monkeypatched.
+get_price is patched on data.fetcher (not runner) — runner.py now routes
+through data_provider.moomoo_provider.MoomooDataProvider, which re-imports
+`data.fetcher.get_price` inside its method body on every call, so patching
+the module attribute here still takes effect.
 
 Run:  python -m unittest engine.test_runner_replacement -v
 """
@@ -18,6 +20,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import config
+import data.fetcher
 import engine.runner as runner
 from engine.scoring import LABEL_FULL, LABEL_OBSERVATION
 from portfolio import capacity_manager
@@ -47,7 +50,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         self.portfolio = Portfolio(path=Path(self._tmpdir.name) / "positions.json")
 
         self._orig_place_order = runner._place_order
-        self._orig_get_price = runner.get_price
+        self._orig_get_price = data.fetcher.get_price
         self._orig_trade_sell = runner.alert.trade_sell
         runner.alert.trade_sell = lambda *a, **kw: None
         self.placed_orders = []
@@ -59,7 +62,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE = self._orig_max_pool
         config.REPLACEMENT_BLOCK_SAME_SECTOR = self._orig_block_sector
         runner._place_order = self._orig_place_order
-        runner.get_price = self._orig_get_price
+        data.fetcher.get_price = self._orig_get_price
         runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
 
@@ -82,7 +85,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
     def test_replacement_succeeds_and_closes_victim(self):
         self._seed_position("US.OBS", LABEL_OBSERVATION, 45.0)
         self._mock_place_order()
-        runner.get_price = lambda code: 12.0
+        data.fetcher.get_price = lambda code: 12.0
 
         victim = runner._attempt_active_replacement(
             self.portfolio, incoming_code="US.NEW", incoming_score=90.0,
@@ -125,7 +128,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         # gate (see engine/runner.py::_attempt_active_replacement docstring).
         self._seed_position("US.OBS", LABEL_OBSERVATION, 45.0)
         self._mock_place_order(order_id_to_return="")
-        runner.get_price = lambda code: 12.0
+        data.fetcher.get_price = lambda code: 12.0
 
         victim = runner._attempt_active_replacement(
             self.portfolio, incoming_code="US.NEW", incoming_score=90.0,
@@ -137,7 +140,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
     def test_dry_run_reports_victim_without_mutating_portfolio(self):
         self._seed_position("US.OBS", LABEL_OBSERVATION, 45.0)
         self._mock_place_order()
-        runner.get_price = lambda code: 12.0
+        data.fetcher.get_price = lambda code: 12.0
 
         victim = runner._attempt_active_replacement(
             self.portfolio, incoming_code="US.NEW", incoming_score=90.0,
@@ -152,7 +155,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
     def test_victim_price_from_results_dict_preferred_over_get_price(self):
         self._seed_position("US.OBS", LABEL_OBSERVATION, 45.0)
         self._mock_place_order()
-        runner.get_price = lambda code: (_ for _ in ()).throw(
+        data.fetcher.get_price = lambda code: (_ for _ in ()).throw(
             AssertionError("get_price should not be called when results has current_price"))
 
         victim = runner._attempt_active_replacement(
@@ -170,7 +173,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         # get "fixed" into a duplicate check by accident later.
         self._seed_position("US.OBS", LABEL_OBSERVATION, 45.0)
         self._mock_place_order()
-        runner.get_price = lambda code: 12.0
+        data.fetcher.get_price = lambda code: 12.0
         config.ENABLE_ACTIVE_REPLACEMENT = False
 
         victim = runner._attempt_active_replacement(
@@ -214,10 +217,10 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.portfolio = Portfolio(path=Path(self._tmpdir.name) / "positions.json")
         self._orig_place_order = runner._place_order
-        self._orig_get_price = runner.get_price
+        self._orig_get_price = data.fetcher.get_price
         self._orig_trade_sell = runner.alert.trade_sell
         runner._place_order = lambda code, side, qty, price, trd_env, env_label, confirmed: "FAKE"
-        runner.get_price = lambda code: 12.0
+        data.fetcher.get_price = lambda code: 12.0
         runner.alert.trade_sell = lambda *a, **kw: None
 
     def tearDown(self):
@@ -229,7 +232,7 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         config.SECTOR_MAP.clear()
         config.SECTOR_MAP.update(self._orig_sector_map)
         runner._place_order = self._orig_place_order
-        runner.get_price = self._orig_get_price
+        data.fetcher.get_price = self._orig_get_price
         runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
 

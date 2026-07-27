@@ -51,7 +51,7 @@ import pandas as pd
 import config
 import engine.news_filter as news_filter
 import engine.scoring as scoring
-from backtest import fetch_kline as _moomoo_fetch
+from data_provider.provider_factory import get_provider
 from engine.indicators import rsi_series
 from engine.news_backtest import HistoricalNewsFeed
 from engine.regime import detect_series as _regime_series
@@ -64,6 +64,8 @@ from portfolio import replacement_stabilizer as rsl
 from risk import guard
 from risk.sizing import rsi_multiplier
 from strategies.boll import BollStrategy
+
+_provider = get_provider(config.MARKET)
 
 # v2.1 横向多因子总分模型：回测环境没有真实历史基本面数据源（跟新闻同一个
 # 坑，见 engine/fundamental.py 模块docstring）。固定分（不管是70还是100）
@@ -415,7 +417,7 @@ def _prepare_backtest_data(stocks: List[str], start: str, end: str,
             fetch_start = start
             if code == QQQ_CODE:
                 fetch_start = (pd.Timestamp(start) - pd.Timedelta(days=_QQQ_WARMUP_DAYS)).strftime("%Y-%m-%d")
-            df = _moomoo_fetch(code, fetch_start, end)
+            df = _provider.get_history(code, start=fetch_start, end=end)
             df["date"] = pd.to_datetime(df["time_key"].str[:10])
             df = df.set_index("date").sort_index()
             df = df[["open", "high", "low", "close", "volume"]].astype(float)

@@ -12,6 +12,11 @@ TRD_ENV:    str  = os.getenv("FUTU_TRD_ENV",       "SIMULATE").upper()
 SECURITY_FIRM: str = os.getenv("FUTU_SECURITY_FIRM", "FUTUSECURITIES").upper()
 ACC_ID:     int  = int(os.getenv("FUTU_ACC_ID",    "0"))
 
+# ── Market / data source routing ─────────────────────────────────────────────
+# US_STOCK | HK_STOCK | JP_STOCK -> MoomooDataProvider; CRYPTO -> BinanceDataProvider
+# See data_provider/provider_factory.py::get_provider()
+MARKET: str = os.getenv("KABU_MARKET", "US_STOCK")
+
 # ── Watchlist ─────────────────────────────────────────────────────────────────
 # Split into two regions per user request (2026-07-03). WATCHLIST itself stays
 # a flat list (many call sites — backtest_portfolio.py, runner.py, etc. —

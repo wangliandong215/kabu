@@ -28,9 +28,12 @@ from pathlib import Path
 
 import pandas as pd
 
-import backtest
+import config
+from data_provider.provider_factory import get_provider
 from engine.hmm_regime import MLRegimeClassifier, load_stock_hmm, HMM_VERSION, prepare_ohlcv
 from engine.regime_store import update_regime
+
+_provider = get_provider(config.MARKET)
 
 SHADOW_LOG_PATH = Path(__file__).parent / "regime_shadow_log.csv"
 SHADOW_LOG_COLUMNS = ["date", "code", "regime", "confidence", "changed_today", "duration_days"]
@@ -58,7 +61,7 @@ def run_shadow_pass(codes: list, as_of: str = None) -> pd.DataFrame:
                 print(f"[skip] {code}: no trained HMM model yet (run engine/hmm_regime.py --codes {code} first)")
                 continue
 
-            raw = backtest.fetch_kline(code, payload["train_start"], as_of)
+            raw = _provider.get_history(code, start=payload["train_start"], end=as_of)
             if raw.empty:
                 print(f"[skip] {code}: no data returned for [{payload['train_start']}, {as_of}]")
                 continue

@@ -32,8 +32,10 @@ from datetime import datetime
 
 import common
 import config
-from data.fetcher import fetch_kline, get_price
+from data_provider.provider_factory import get_provider
 from strategies import get_strategy
+
+_provider = get_provider(config.MARKET)
 
 
 # ── Audit log ─────────────────────────────────────────────────────────────────
@@ -66,7 +68,7 @@ def run_trade(
 
     # ── Step 1: Run analysis ──────────────────────────────────────────────────
     strategy = get_strategy(strategy_name)
-    df = fetch_kline(code, ktype=ktype, bars=bars)
+    df = _provider.get_history(code, interval=ktype, limit=bars)
     if df is None or len(df) == 0:
         print(f"Error: no data returned for {code}")
         sys.exit(1)
@@ -95,7 +97,7 @@ def run_trade(
         return
 
     # ── Step 3: Fetch current price and compute qty ───────────────────────────
-    price = get_price(code)
+    price = _provider.get_latest_price(code)
     if price <= 0:
         price = float(df.iloc[-1]["close"])
 
