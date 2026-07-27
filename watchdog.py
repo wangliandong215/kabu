@@ -159,6 +159,7 @@ def main() -> None:
     if age <= _STALE_THRESHOLD:
         if _ALERTED_MARKER.exists():
             _ALERTED_MARKER.unlink()
+            alert.push_raw("OpenD/监控进程已恢复正常，scan pass 心跳正常")
         return
 
     if _is_pid_running(pid):

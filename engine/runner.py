@@ -762,6 +762,13 @@ def run_loop(
     alert.info(f"kabu 监控已启动，每{interval_seconds // 60}分钟扫描一次")
     while True:
         _write_heartbeat()
+
+        # Checked before run_once() (not after) so the notification fires the
+        # moment the open window is entered, rather than waiting for the
+        # ~5min scan of the full watchlist to finish first.
+        if should_notify_open():
+            alert.info("美股开盘，开始扫描")
+
         try:
             run_once(
                 strategy_name=strategy_name,
@@ -779,8 +786,6 @@ def run_loop(
         except Exception as exc:
             alert.error(f"本轮扫描出现未处理异常 — {exc}")
 
-        if should_notify_open():
-            alert.info("美股开盘，开始扫描")
         if should_notify_close():
             alert.warn("美股收盘，停止扫描")
 
