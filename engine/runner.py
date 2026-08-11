@@ -635,21 +635,31 @@ def run_once(
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_market_context failed {code} — {exc}")
 
-    # ── 2d. QQQ Beta 底仓：固定目标仓位，只要不在持有中且 QQQ>MA200 就买回 ──
+    # ── 2d. QQQ Beta 底仓：固定目标仓位，站上MA200时买入/补仓到目标比例 ──────
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
     # JP Paper pass 跳过这一段——用JP虚拟资金买US.QQQ底仓没有意义。
-    qqq_held = not is_jp_pass and portfolio.get_position(config.QQQ_CORE_CODE) is not None
+    # 2026-08-12 fix: 原来是"只要没持有就一次性买入"语义——如果建仓当天
+    # 现金紧张（被2c的活跃信号仓位先占用），QQQ底仓就会永久卡在一个远低于
+    # 目标的仓位上（实测卡在1.2%，目标25%），之后哪怕现金充裕了也不会补。
+    # 改成按 shortfall = 目标市值 − 当前市值 逐步补仓，每次run现金充裕时
+    # 都会继续往目标比例补，直到到位；跌破MA200时shortfall天然按0处理
+    # （见下方else分支——不追高也不在熊市补仓）。
+    qqq_position   = None if is_jp_pass else portfolio.get_position(config.QQQ_CORE_CODE)
+    qqq_held_value = (qqq_position["avg_cost"] * qqq_position["qty"]) if qqq_position else 0.0
 
-    if not is_jp_pass and not qqq_held and not macro_block:
+    if not is_jp_pass and not macro_block:
         if _qqq_above_ma():
-            qqq_price = get_price(config.QQQ_CORE_CODE)
             target_value = config.QQQ_CORE_TARGET_PCT * portfolio.total_capital()
-            spend        = min(portfolio.available_cash() * 0.98, target_value)
+            shortfall    = target_value - qqq_held_value
+            qqq_price    = get_price(config.QQQ_CORE_CODE) if shortfall > 0 else 0.0
+            spend        = min(portfolio.available_cash() * 0.98, shortfall) if shortfall > 0 else 0.0
             if qqq_price > 0 and spend > qqq_price:
                 qty = int(spend / qqq_price)
                 if qty > 0:
-                    alert.info(f"QQQ底仓买入 {qty}股 @{qqq_price:.2f}"
+                    action = "补仓" if qqq_position is not None else "买入"
+                    alert.info(f"QQQ底仓{action} {qty}股 @{qqq_price:.2f}"
                                f"（目标仓位{config.QQQ_CORE_TARGET_PCT:.0%}，"
+                               f"当前{qqq_held_value / portfolio.total_capital():.1%}，"
                                f"站上MA{config.QQQ_MA_PERIOD}）")
                     order_id = _place_order(
                         code=config.QQQ_CORE_CODE, side="BUY",
@@ -657,52 +667,70 @@ def run_once(
                         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                     )
                     if confirmed and order_id:
-                        portfolio.open_position(
-                            config.QQQ_CORE_CODE, "BUY", qqq_price, qty,
-                            signal_strength=1.0, strategy="core_etf",
-                        )
-                        alert.trade_buy(
-                            config.QQQ_CORE_CODE, qqq_price, qty,
-                            sector="etf", score=None, score_label="CORE_ETF",
-                            stop_price=None,
-                            position_pct=(qqq_price * qty) / portfolio.total_capital(),
-                            cash_available=portfolio.available_cash(),
-                            position_count=portfolio.position_count(),
-                            trade_id=portfolio.next_trade_id(), env=env_label,
-                        )
-                        if tracker is not None:
-                            try:
-                                pos_after = portfolio.get_position(config.QQQ_CORE_CODE)
-                                tracker.log_entry(
-                                    trade_id=_trade_id(config.QQQ_CORE_CODE,
-                                                       pos_after.get("entry_time")),
-                                    ticker=config.QQQ_CORE_CODE, strategy_name="core_etf",
-                                    strategy_version=config.SYSTEM_VERSION,
-                                    direction="LONG", price=qqq_price, shares=qty,
-                                    position_value=qqq_price * qty,
-                                    position_pct=(qqq_price * qty) / portfolio.total_capital(),
-                                    cash=portfolio.available_cash(),
-                                    equity=portfolio.current_equity(),
-                                    timestamp=pos_after.get("entry_time"),
-                                    regime_ctx=_trade_regime_ctx(
-                                        config.QQQ_CORE_CODE, ktype, bars),
-                                    run_id=run_id, sector="etf",
-                                    market_environment=weather_code,
-                                    market="US", execution="REAL",
-                                )
-                            except Exception as exc:
-                                alert.log(f"trade_tracker: log_entry failed "
-                                          f"{config.QQQ_CORE_CODE} — {exc}")
-                            try:
-                                tracker.log_market_context(
-                                    trade_id=_trade_id(
-                                        config.QQQ_CORE_CODE,
-                                        pos_after.get("entry_time")),
-                                    ctx=market_context.get_latest_context(),
-                                )
-                            except Exception as exc:
-                                alert.log(f"trade_tracker: log_market_context "
-                                          f"failed {config.QQQ_CORE_CODE} — {exc}")
+                        if qqq_position is not None:
+                            # 补仓走pyramid同款的add_to_position——跟2b的scale-in
+                            # 一样只更新qty/avg_cost，不新开Trade Intelligence DB
+                            # 记录（那条记录的trade_id绑定在原始entry_time上）。
+                            portfolio.add_to_position(
+                                config.QQQ_CORE_CODE, qqq_price, qty,
+                                new_strength=1.0, strategy="core_etf",
+                            )
+                            alert.trade_buy(
+                                config.QQQ_CORE_CODE, qqq_price, qty,
+                                sector="etf", score=None, score_label="CORE_ETF",
+                                stop_price=None,
+                                position_pct=(qqq_held_value + qqq_price * qty) / portfolio.total_capital(),
+                                cash_available=portfolio.available_cash(),
+                                position_count=portfolio.position_count(),
+                                trade_id=portfolio.next_trade_id(), env=env_label,
+                            )
+                        else:
+                            portfolio.open_position(
+                                config.QQQ_CORE_CODE, "BUY", qqq_price, qty,
+                                signal_strength=1.0, strategy="core_etf",
+                            )
+                            alert.trade_buy(
+                                config.QQQ_CORE_CODE, qqq_price, qty,
+                                sector="etf", score=None, score_label="CORE_ETF",
+                                stop_price=None,
+                                position_pct=(qqq_price * qty) / portfolio.total_capital(),
+                                cash_available=portfolio.available_cash(),
+                                position_count=portfolio.position_count(),
+                                trade_id=portfolio.next_trade_id(), env=env_label,
+                            )
+                            if tracker is not None:
+                                try:
+                                    pos_after = portfolio.get_position(config.QQQ_CORE_CODE)
+                                    tracker.log_entry(
+                                        trade_id=_trade_id(config.QQQ_CORE_CODE,
+                                                           pos_after.get("entry_time")),
+                                        ticker=config.QQQ_CORE_CODE, strategy_name="core_etf",
+                                        strategy_version=config.SYSTEM_VERSION,
+                                        direction="LONG", price=qqq_price, shares=qty,
+                                        position_value=qqq_price * qty,
+                                        position_pct=(qqq_price * qty) / portfolio.total_capital(),
+                                        cash=portfolio.available_cash(),
+                                        equity=portfolio.current_equity(),
+                                        timestamp=pos_after.get("entry_time"),
+                                        regime_ctx=_trade_regime_ctx(
+                                            config.QQQ_CORE_CODE, ktype, bars),
+                                        run_id=run_id, sector="etf",
+                                        market_environment=weather_code,
+                                        market="US", execution="REAL",
+                                    )
+                                except Exception as exc:
+                                    alert.log(f"trade_tracker: log_entry failed "
+                                              f"{config.QQQ_CORE_CODE} — {exc}")
+                                try:
+                                    tracker.log_market_context(
+                                        trade_id=_trade_id(
+                                            config.QQQ_CORE_CODE,
+                                            pos_after.get("entry_time")),
+                                        ctx=market_context.get_latest_context(),
+                                    )
+                                except Exception as exc:
+                                    alert.log(f"trade_tracker: log_market_context "
+                                              f"failed {config.QQQ_CORE_CODE} — {exc}")
         else:
             alert.log(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
                       f"  (bear market, stay in cash)")
