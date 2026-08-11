@@ -307,16 +307,20 @@ def should_notify_close() -> bool:
     return False
 
 
-def just_opened(minutes_after: int = 5, now: datetime = None) -> bool:
+def just_opened(minutes_after: int = 0, now: datetime = None) -> bool:
     """True once `now` (defaults to current JST time) is at or past
     `minutes_after` past today's US market open — mirrors just_closed() for
-    a one-time post-open notification. No window end: should_notify_open()'s
-    per-day dedup is what makes this fire only once, so a notification isn't
-    silently lost if a scan pass runs long and the check happens well after
-    open (observed 2026-07-24: a stuck moomoo OpenD connection delayed a
-    pass by ~20min, long enough to miss a fixed-width window entirely). The
-    open check lands on the JST evening of the session's own opening day, so
-    the trading-day check is against `now.date()` directly."""
+    a one-time post-open notification. Default is 0 (fire right at the
+    open, not some buffer after it — 2026-07-28 user wants to know the
+    instant 9:30 hits, not minutes later) since this only gates a
+    notification, not a trading action, so there's no risk in not waiting.
+    No window end: should_notify_open()'s per-day dedup is what makes this
+    fire only once, so a notification isn't silently lost if a scan pass
+    runs long and the check happens well after open (observed 2026-07-24: a
+    stuck moomoo OpenD connection delayed a pass by ~20min, long enough to
+    miss a fixed-width window entirely). The open check lands on the JST
+    evening of the session's own opening day, so the trading-day check is
+    against `now.date()` directly."""
     if now is None:
         now = datetime.now(_JST)
     elif now.tzinfo is None:

@@ -184,6 +184,37 @@ CREATE TABLE IF NOT EXISTS metadata (
     parameter_hash   TEXT,
     git_commit       TEXT
 );
+
+-- v2.9 — Market Context Logging (see engine/market_context.py). One row per
+-- trade, snapshotting the most recent daily market_context row (VIX/CNN Fear
+-- & Greed/AAII/Put-Call/NAAIM) at the moment of ENTRY. A snapshot copy, not a
+-- foreign key to market_context.observation_date — the value at entry time
+-- must never change retroactively even if market_context is later
+-- backfilled/corrected. Read-only for now: nothing in this codebase queries
+-- these columns for BUY/SELL/Confidence Score/sizing decisions (see that
+-- module's docstring) — they exist purely for the post-hoc statistical
+-- analysis described in the V2.9.x spec (section ten).
+CREATE TABLE IF NOT EXISTS trade_market_context (
+    trade_id             TEXT PRIMARY KEY REFERENCES trades(trade_id),
+    observation_date     TEXT,
+    vix_close            REAL,
+    vix_date             TEXT,
+    vix_source           TEXT,
+    cnn_fear_greed       REAL,
+    cnn_fear_greed_label TEXT,
+    cnn_fear_greed_date  TEXT,
+    aaii_bullish         REAL,
+    aaii_bearish         REAL,
+    aaii_neutral         REAL,
+    aaii_spread          REAL,
+    aaii_date            TEXT,
+    put_call_ratio       REAL,
+    put_call_date        TEXT,
+    put_call_source      TEXT,
+    naaim_exposure       REAL,
+    naaim_date           TEXT,
+    data_status          TEXT
+);
 """
 
 
@@ -293,6 +324,45 @@ class TradeTracker:
                 (trade_id, ctx.get("regime"), ctx.get("regime_label"),
                  ctx.get("confidence"), mrd_version,
                  json.dumps(regime_ctx, ensure_ascii=False) if regime_ctx else None),
+            )
+            self._conn.commit()
+
+    def log_market_context(self, trade_id: str, ctx: Optional[dict]) -> None:
+        """v2.9 — record the market_context snapshot (a dict shaped like
+        engine.market_context.MarketContextStore.get_latest_context()'s
+        return value) for one trade's ENTRY. Always writes a row (even when
+        ctx is None — every column just stays NULL) so a join against
+        `trades` never has to special-case a missing row vs. a row full of
+        NULLs; the caller can tell the two apart via data_status ('{}' when
+        ctx was None, populated JSON otherwise).
+
+        Never raises — ctx normally comes from a best-effort fetch/DB read
+        (see engine/market_context.py's module docstring on why every
+        fetch_* there returns None instead of raising), so this mirrors
+        that same never-break-a-trading-pass contract instead of forcing
+        every call site to guard against a schema mismatch too."""
+        ctx = ctx or {}
+        data_status = ctx.get("data_status")
+        if isinstance(data_status, dict):
+            data_status = json.dumps(data_status, ensure_ascii=False)
+        with _write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO trade_market_context (
+                    trade_id, observation_date, vix_close, vix_date, vix_source,
+                    cnn_fear_greed, cnn_fear_greed_label, cnn_fear_greed_date,
+                    aaii_bullish, aaii_bearish, aaii_neutral, aaii_spread, aaii_date,
+                    put_call_ratio, put_call_date, put_call_source,
+                    naaim_exposure, naaim_date, data_status
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (trade_id, ctx.get("observation_date"),
+                 ctx.get("vix_close"), ctx.get("vix_date"), ctx.get("vix_source"),
+                 ctx.get("cnn_fear_greed"), ctx.get("cnn_fear_greed_label"),
+                 ctx.get("cnn_fear_greed_date"),
+                 ctx.get("aaii_bullish"), ctx.get("aaii_bearish"),
+                 ctx.get("aaii_neutral"), ctx.get("aaii_spread"), ctx.get("aaii_date"),
+                 ctx.get("put_call_ratio"), ctx.get("put_call_date"),
+                 ctx.get("put_call_source"),
+                 ctx.get("naaim_exposure"), ctx.get("naaim_date"), data_status),
             )
             self._conn.commit()
 
@@ -482,7 +552,7 @@ class TradeTracker:
             self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     _EXPORTABLE_TABLES = {"trades", "trade_attribution", "trade_events",
-                           "trade_daily", "metadata"}
+                           "trade_daily", "metadata", "trade_market_context"}
 
     def export_csv(self, table: str, path) -> None:
         """v2.8 — dump one table to CSV. `table` is checked against a fixed

@@ -114,6 +114,59 @@ class TestLogEntry(TradeTrackerTestCase):
         self.assertEqual(len(self._raw("SELECT * FROM trades")), 1)
 
 
+class TestLogMarketContext(TradeTrackerTestCase):
+    """v2.9 Market Context Logging snapshot table — see
+    engine/market_context.py for the fetch/store side; this only covers
+    trade_tracker.py's own log_market_context()."""
+
+    def _open_trade(self, trade_id="US.AAPL_2026-08-07T09:30:00"):
+        self.tracker.log_entry(
+            trade_id=trade_id, ticker="US.AAPL", strategy_name="atr_breakout",
+            strategy_version="2.9", direction="LONG", price=100.0, shares=10,
+            position_value=1000.0, position_pct=0.1,
+            cash=9000.0, equity=10000.0, timestamp="2026-08-07T09:30:00",
+        )
+        return trade_id
+
+    def test_writes_full_snapshot(self):
+        trade_id = self._open_trade()
+        self.tracker.log_market_context(trade_id, {
+            "observation_date": "2026-08-07",
+            "vix_close": 18.7, "vix_date": "2026-08-06", "vix_source": "CBOE",
+            "cnn_fear_greed": 63.0, "cnn_fear_greed_label": "greed",
+            "cnn_fear_greed_date": "2026-08-07",
+            "naaim_exposure": 82.5, "naaim_date": "2026-08-05",
+            "aaii_bullish": None, "put_call_ratio": None,
+            "data_status": {"vix": "OK", "cnn": "OK", "naaim": "OK",
+                            "aaii": "NOT_IMPLEMENTED", "put_call": "NOT_IMPLEMENTED"},
+        })
+        row = self._raw("SELECT * FROM trade_market_context WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertEqual(row["observation_date"], "2026-08-07")
+        self.assertEqual(row["vix_close"], 18.7)
+        self.assertEqual(row["cnn_fear_greed"], 63.0)
+        self.assertEqual(row["naaim_exposure"], 82.5)
+        self.assertIsNone(row["aaii_bullish"])
+        self.assertIn("NOT_IMPLEMENTED", row["data_status"])
+
+    def test_none_ctx_writes_all_null_row(self):
+        trade_id = self._open_trade()
+        self.tracker.log_market_context(trade_id, None)
+        row = self._raw("SELECT * FROM trade_market_context WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertIsNone(row["vix_close"])
+        self.assertIsNone(row["observation_date"])
+
+    def test_same_trade_id_overwrites_not_crashes(self):
+        trade_id = self._open_trade()
+        self.tracker.log_market_context(trade_id, {"vix_close": 15.0})
+        self.tracker.log_market_context(trade_id, {"vix_close": 16.0})
+        rows = self._raw("SELECT * FROM trade_market_context WHERE trade_id=?",
+                          (trade_id,))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["vix_close"], 16.0)
+
+
 class TestLogExit(TradeTrackerTestCase):
 
     def _open(self, direction="LONG", entry_price=100.0, shares=10,

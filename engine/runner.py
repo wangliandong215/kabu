@@ -21,15 +21,14 @@ import notify.alert as alert
 from common import infer_market, parse_trd_env
 from data.fetcher import get_price
 from engine.broker import get_broker
-from engine.scanner import scan, smart_scan, rank_signals
+from engine.scanner import scan, smart_scan
 from engine import news as news_sentiment
-from engine import news_filter
-from engine import fundamental
+from engine import pipeline
 from engine import scoring
 from engine import regime
 from engine import market_weather
+from engine import market_context
 from engine.market_hours import filter_open, should_notify_close, should_notify_open, is_daytime_jst
-from risk.earnings import is_earnings_blackout
 from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
 from risk import guard, sizing
@@ -475,91 +474,55 @@ def run_once(
                     trade_id=portfolio.next_trade_id(), env=env_label,
                 )
 
-    # ── 2c. Open new positions — ranked by signal strength ────────────────────
-    buy_signals = rank_signals(results, signal="BUY")
+    # ── 2c. Open new positions — Two-Phase Execution ──────────────────────────
+    # Candidate Pool + Global Filters + Ranking Engine live in engine/pipeline.py
+    # (already-held/cooldown/min-strength/earnings-blackout/macro_block filtering,
+    # plus full total_score computed for every survivor up front — see that
+    # module's docstring for why: it's what fixes the old bug where a
+    # later-ranked-but-equal-or-better candidate never got scored before capacity
+    # filled up, see the 2026-07-29 US.BKNG/US.ABNB case). Portfolio Construction
+    # and Order Executor stay here — they mutate `portfolio` sequentially
+    # (capacity/exposure/sector recheck + Active Replacement + sizing + order
+    # placement per candidate), which is unchanged existing behavior, not part
+    # of the ranking-order bug this refactor fixes.
+    candidates = pipeline.build_candidate_pool(
+        results, portfolio, macro_block, score_env, weather_code)
+    ranked = pipeline.rank_candidates(candidates)
     # Active count excludes QQQ core position
     active_count = sum(1 for p in portfolio.data["positions"].values()
                        if p.get("strategy") != "core_etf")
     slots_free   = config.MAX_POSITIONS - active_count
-    alert.log(f"runner: {len(buy_signals)} BUY signal(s) found, "
+    alert.log(f"runner: {len(ranked)} BUY candidate(s) ranked, "
               f"{slots_free} slot(s) available  (active={active_count})")
 
-    for ranked in buy_signals:
-        code   = ranked["code"]
-        result = ranked
+    for entry_rank, cand in enumerate(ranked, start=1):
+        code   = cand.code
+        result = cand.raw
 
-        if portfolio.get_position(code):
-            alert.log(f"runner: {code} already held — skip")
-            continue
-
-        if portfolio.is_cooldown(code):
-            alert.log(f"runner: {code} in TRENDING_EARLY stop-out cooldown — skip")
-            continue
-
-        # Minimum signal quality gate — filter weak signals to reduce commission drag
-        if result.get("signal_strength", 0) < config.MIN_ENTRY_STRENGTH:
-            alert.log(f"runner: {code} strength {result.get('signal_strength',0):.0%} "
-                      f"< {config.MIN_ENTRY_STRENGTH:.0%} threshold — skip")
-            continue
-
-        if macro_block:
-            alert.log(f"runner: {code} skipped — macro circuit breaker active")
-            break
-
-        # Earnings blackout — no new positions within ±1 day of earnings
-        if is_earnings_blackout(code):
-            alert.warn_skip(code, f"{code} 处于财报窗口期，跳过开仓")
-            continue
-
-        # ── v2.1 横向多因子总分：趋势(40%)+基本面(20%)+新闻(20%)+天气(20%) ──
-        # 见 engine/scoring.py。新闻/基本面都走真实API（各自4h缓存，见
-        # engine/news_filter.py::classify_code / engine/fundamental.py），
-        # 不是 backtest_portfolio.py 里那个固定中性分的版本。
-        strength = result.get("signal_strength", 0.5)
-        news_result = news_filter.classify_code(code)
-        fund_result = fundamental.score(code, env=score_env)
-        total = scoring.compute_total_score(
-            trend_strength=strength,
-            weather_code=weather_code,
-            fundamental_score=fund_result["score"],
-            news_score=news_result["score"],
-        )
-
-        def _fmt(v):   # score components can be None (missing data, excluded/renormalized)
-            return f"{v:5.1f}" if v is not None else "  N/A"
-
-        alert.log(
-            f"SCORE {code:8s} trend={_fmt(total.trend_score)} "
-            f"fund={_fmt(total.fundamental_score)} news={_fmt(total.news_score)} "
-            f"weather={_fmt(total.weather_score)} total={_fmt(total.total)} "
-            f"-> {total.label}"
-            + (f"  news_tier={news_result['tier']}({news_result.get('matched_keyword')})"
-               if news_result["tier"] != 3 else "")
-            + (f"  fund_tier={fund_result['tier']}({fund_result['reason']})"
-               if fund_result["tier"] != 3 else "")
-        )
-        if total.label == scoring.LABEL_SKIP:
-            continue   # 总分<40，或天气state0（已在上面macro_block短路，这里是双保险）
         if not guard.can_open_position(portfolio):
             # ── v2.3/v2.4 Portfolio Capacity Manager（主动置换）────────────
             # 名额已满时，只有新信号是FULL才尝试换出一个OBSERVATION持仓
             # 腾出名额，而不是直接放弃——跟backtest_portfolio.py共用同一个
             # portfolio.capacity_manager.evaluate_replacement()判断入口
             # （Single Source of Truth，2026-07-06统一，见该函数docstring）。
-            # 找不到victim就维持原有行为（break）。
+            # 找不到victim就维持原有行为（break）：候选已经按总分从高到低排好
+            # 序了，如果排名最靠前的这个候选都换不出名额，排名更靠后（总分
+            # 更低）的候选面对的是同一批持仓（victim池不变），置换优势只会
+            # 更难满足（REPLACEMENT_MARGIN 是跟 incoming_score 比较），不会
+            # 有更好的结果，所以不用继续试，直接break跟原有语义一致。
             victim_code = None
-            if config.ENABLE_ACTIVE_REPLACEMENT and total.label == scoring.LABEL_FULL:
+            if config.ENABLE_ACTIVE_REPLACEMENT and cand.score_label == scoring.LABEL_FULL:
                 victim_code = _attempt_active_replacement(
-                    portfolio, incoming_code=code, incoming_score=total.total,
+                    portfolio, incoming_code=code, incoming_score=cand.total_score,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                     results=results, tracker=tracker, ktype=ktype, bars=bars,
                 )
             if victim_code is None:
-                skip_price = result.get("current_price", 0.0)
+                skip_price = cand.current_price
                 alert.warn_skip(code, f"持仓数已达上限，跳过 {code}"
-                                f"（现价{skip_price:.4f}，评分{total.total:.0f}/{total.label}）")
+                                f"（现价{skip_price:.4f}，评分{cand.total_score:.0f}/{cand.score_label}）")
                 break
-            # 置换成立，名额已腾出——不 break，直接往下走已有的敞口/板块/
+            # 置换成立，名额已腾出——直接往下走已有的敞口/板块/
             # sizing/BUY逻辑，就像这个名额本来就空着一样。
         if not guard.check_total_exposure(portfolio):
             alert.log(f"runner: total exposure {portfolio.exposure_pct():.0%} "
@@ -572,7 +535,7 @@ def run_once(
                             f"已达上限{config.MAX_SECTOR_EXPOSURE_PCT:.0%}，跳过")
             continue
 
-        price = result.get("current_price", 0.0)
+        price = cand.current_price
         if price <= 0:
             alert.warn_skip(code, f"{code} 无法获取价格，跳过")
             continue
@@ -594,9 +557,9 @@ def run_once(
         # position_scale 参数"trims, never expands"的既有语义一致）。
         trial_scale = (config.TRENDING_EARLY_POSITION_SCALE
                        if entry_strategy == "atr_breakout_early" else 1.0)
-        position_scale = trial_scale * total.position_scale
+        position_scale = trial_scale * cand.score_components["position_scale"]
         qty = sizing.calculate(
-            portfolio.available_cash(), price, strength,
+            portfolio.available_cash(), price, cand.signal_strength,
             total_capital=portfolio.total_capital(),
             stop_loss_pct=stop_pct,
             kelly_factor=kelly_factor,
@@ -606,15 +569,14 @@ def run_once(
             rsi_val=result.get("rsi14"),
             position_scale=position_scale,
             market_weather_code=weather_code,
-            score_label=total.label,
+            score_label=cand.score_label,
         )
         if qty <= 0:
             alert.warn_skip(code, f"{code} 现价{price:.4f}下可买股数为0，跳过")
             continue
 
-        entry_rank = buy_signals.index(ranked) + 1
         alert.info(f"准备买入 {code}，{qty}股 @{price:.4f}，"
-                   f"信号强度{result.get('signal_strength', 0):.0%}，"
+                   f"信号强度{cand.signal_strength:.0%}，"
                    f"排名#{entry_rank}")
         order_id = _place_order(
             code=code,
@@ -630,13 +592,13 @@ def run_once(
             # score_label/total_score persisted too so this position can itself be
             # considered as a future Active Replacement victim (see
             # _attempt_active_replacement above).
-            portfolio.open_position(code, "BUY", price, qty, strength, entry_strategy,
+            portfolio.open_position(code, "BUY", price, qty, cand.signal_strength, entry_strategy,
                                     entry_atr=result.get("atr", 0.0),
-                                    score_label=total.label, total_score=total.total)
+                                    score_label=cand.score_label, total_score=cand.total_score)
             alert.trade_buy(
                 code, price, qty,
                 sector=config.SECTOR_MAP.get(code, "other"),
-                score=total.total, score_label=total.label,
+                score=cand.total_score, score_label=cand.score_label,
                 stop_price=portfolio.get_position(code).get("trail_stop"),
                 position_pct=(price * qty) / portfolio.total_capital(),
                 cash_available=portfolio.available_cash(),
@@ -665,6 +627,13 @@ def run_once(
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_entry failed {code} — {exc}")
+                try:
+                    tracker.log_market_context(
+                        trade_id=_trade_id(code, pos_after.get("entry_time")),
+                        ctx=market_context.get_latest_context(),
+                    )
+                except Exception as exc:
+                    alert.log(f"trade_tracker: log_market_context failed {code} — {exc}")
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，只要不在持有中且 QQQ>MA200 就买回 ──
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
@@ -724,6 +693,16 @@ def run_once(
                             except Exception as exc:
                                 alert.log(f"trade_tracker: log_entry failed "
                                           f"{config.QQQ_CORE_CODE} — {exc}")
+                            try:
+                                tracker.log_market_context(
+                                    trade_id=_trade_id(
+                                        config.QQQ_CORE_CODE,
+                                        pos_after.get("entry_time")),
+                                    ctx=market_context.get_latest_context(),
+                                )
+                            except Exception as exc:
+                                alert.log(f"trade_tracker: log_market_context "
+                                          f"failed {config.QQQ_CORE_CODE} — {exc}")
         else:
             alert.log(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
                       f"  (bear market, stay in cash)")
@@ -768,6 +747,18 @@ def run_loop(
         # ~5min scan of the full watchlist to finish first.
         if should_notify_open():
             alert.info("美股开盘，开始扫描")
+
+        # v2.9 Market Context Logging — once per ET calendar day (08:30 ET,
+        # before market open), never on the 5-minute scan cadence. Failure
+        # here must never stop the scan loop (see engine/market_context.py
+        # module docstring).
+        try:
+            if market_context.should_run_daily_update():
+                ctx = market_context.update_market_context()
+                alert.log(f"market_context: daily update saved — "
+                          f"{ctx.get('data_status')}")
+        except Exception as exc:
+            alert.log(f"market_context: daily update failed — {exc}")
 
         try:
             run_once(
