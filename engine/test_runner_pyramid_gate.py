@@ -72,7 +72,10 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
 
         def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed):
             self.placed_orders.append({"code": code, "side": side, "qty": qty})
-            return "FAKE123" if confirmed else ""
+            dealt = float(qty) if confirmed else 0.0
+            return {"order_id": "FAKE123" if confirmed else "", "dealt_qty": dealt,
+                    "dealt_avg_price": price if confirmed else 0.0,
+                    "status": "FILLED_ALL" if confirmed else "DRY_RUN"}
         runner._place_order = _mock_place_order
 
     def tearDown(self):

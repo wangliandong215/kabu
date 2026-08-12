@@ -63,10 +63,15 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
 
-    def _mock_place_order(self, order_id_to_return="FAKE123"):
+    def _mock_place_order(self, dealt_qty_override=None):
         def _mock(code, side, qty, price, trd_env, env_label, confirmed):
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
-            return order_id_to_return if confirmed else ""
+            dealt = qty if dealt_qty_override is None else dealt_qty_override
+            if not confirmed:
+                dealt = 0
+            return {"order_id": "FAKE123" if dealt > 0 else "", "dealt_qty": float(dealt),
+                    "dealt_avg_price": price if dealt > 0 else 0.0,
+                    "status": "FILLED_ALL" if dealt > 0 else "CANCELLED_ALL"}
         runner._place_order = _mock
 
     def _seed_position(self, code, score_label, total_score, qty=10):
@@ -119,12 +124,12 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         self.assertIsNotNone(self.portfolio.get_position("US.OBS"))
 
     def test_sell_order_failure_leaves_position_untouched(self):
-        # Simulates a broker rejection (_place_order returns "" even though
-        # confirmed=True) -- this is the stricter order_id gate this feature
-        # adds on top of the existing exit-loop's weaker "confirmed alone"
-        # gate (see engine/runner.py::_attempt_active_replacement docstring).
+        # Simulates an order that never filled (dealt_qty=0 even though
+        # confirmed=True and order_id came back) -- the dealt_qty gate this
+        # feature uses on top of the existing exit-loop's same gate (see
+        # engine/runner.py::_attempt_active_replacement docstring).
         self._seed_position("US.OBS", LABEL_OBSERVATION, 45.0)
-        self._mock_place_order(order_id_to_return="")
+        self._mock_place_order(dealt_qty_override=0)
         runner.get_price = lambda code: 12.0
 
         victim = runner._attempt_active_replacement(
@@ -216,7 +221,9 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         self._orig_place_order = runner._place_order
         self._orig_get_price = runner.get_price
         self._orig_trade_sell = runner.alert.trade_sell
-        runner._place_order = lambda code, side, qty, price, trd_env, env_label, confirmed: "FAKE"
+        runner._place_order = lambda code, side, qty, price, trd_env, env_label, confirmed: {
+            "order_id": "FAKE", "dealt_qty": float(qty), "dealt_avg_price": price,
+            "status": "FILLED_ALL"}
         runner.get_price = lambda code: 12.0
         runner.alert.trade_sell = lambda *a, **kw: None
 

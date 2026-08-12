@@ -209,14 +209,15 @@ def run_once(
             if not _qqq_above_ma():
                 alert.warn(f"QQQ底仓跌破MA{config.QQQ_MA_PERIOD}"
                            f"（现价{price:.2f}），清仓退出")
-                order_id = _place_order(
+                fill = _place_order(
                     code=code, side="SELL", qty=pos["qty"], price=price,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                 )
-                if confirmed and order_id:
-                    closed = portfolio.close_position(code, price, reason="MA200_BREAK")
+                if confirmed and fill["dealt_qty"] >= pos["qty"]:
+                    exit_price = fill["dealt_avg_price"] or price
+                    closed = portfolio.close_position(code, exit_price, reason="MA200_BREAK")
                     alert.trade_sell(
-                        code, closed["avg_cost"], price, closed["qty"],
+                        code, closed["avg_cost"], exit_price, closed["qty"],
                         days_held=_days_held(closed.get("entry_time")),
                         reason="MA200_BREAK",
                         cash_available=portfolio.available_cash(),
@@ -228,7 +229,7 @@ def run_once(
                         try:
                             tracker.log_exit(
                                 trade_id=_trade_id(code, closed.get("entry_time")),
-                                price=price, cash=portfolio.available_cash(),
+                                price=exit_price, cash=portfolio.available_cash(),
                                 equity=portfolio.current_equity(),
                                 timestamp=datetime.now().isoformat(),
                                 exit_reason="MA200_BREAK",
@@ -266,7 +267,7 @@ def run_once(
         if reason:
             alert.warn(f"{code} 触发退出（{reason}），策略={entry_strat}，"
                        f"成本={pos['entry_price']:.4f}，现价={price:.4f}")
-            order_id = _place_order(
+            fill = _place_order(
                 code=code,
                 side="SELL",
                 qty=pos["qty"],
@@ -275,10 +276,11 @@ def run_once(
                 env_label=env_label,
                 confirmed=confirmed,
             )
-            if confirmed and order_id:
-                closed = portfolio.close_position(code, price, reason=reason)
+            if confirmed and fill["dealt_qty"] >= pos["qty"]:
+                exit_price = fill["dealt_avg_price"] or price
+                closed = portfolio.close_position(code, exit_price, reason=reason)
                 alert.trade_sell(
-                    code, closed["avg_cost"], price, closed["qty"],
+                    code, closed["avg_cost"], exit_price, closed["qty"],
                     days_held=_days_held(closed.get("entry_time")),
                     reason=reason,
                     cash_available=portfolio.available_cash(),
@@ -290,7 +292,7 @@ def run_once(
                     try:
                         tracker.log_exit(
                             trade_id=_trade_id(code, closed.get("entry_time")),
-                            price=price, cash=portfolio.available_cash(),
+                            price=exit_price, cash=portfolio.available_cash(),
                             equity=portfolio.current_equity(),
                             timestamp=datetime.now().isoformat(),
                             exit_reason=reason,
@@ -394,15 +396,17 @@ def run_once(
 
             alert.info(f"{code} 试错仓位转正（early→confirmed），"
                        f"加仓{add_qty}股 @{price:.4f}")
-            order_id = _place_order(
+            fill = _place_order(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
             )
-            if confirmed and order_id:
-                portfolio.add_to_position(code, price, add_qty, strength,
+            if confirmed and fill["dealt_qty"] > 0:
+                filled_qty = int(fill["dealt_qty"])
+                fill_price = fill["dealt_avg_price"] or price
+                portfolio.add_to_position(code, fill_price, filled_qty, strength,
                                           strategy="atr_breakout")
                 alert.trade_buy(
-                    code, price, add_qty,
+                    code, fill_price, filled_qty,
                     sector=config.SECTOR_MAP.get(code, "other"),
                     score=pos.get("total_score"), score_label=pos.get("score_label"),
                     stop_price=pos.get("trail_stop"),
@@ -457,14 +461,16 @@ def run_once(
             alert.info(f"{code} 加仓（金字塔），+{add_qty}股，"
                        f"信号强度{old_str:.0%}→{new_str:.0%}，"
                        f"均本{avg_cost:.2f}，现价{price:.2f}")
-            order_id = _place_order(
+            fill = _place_order(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
             )
-            if confirmed and order_id:
-                portfolio.add_to_position(code, price, add_qty, new_str)
+            if confirmed and fill["dealt_qty"] > 0:
+                filled_qty = int(fill["dealt_qty"])
+                fill_price = fill["dealt_avg_price"] or price
+                portfolio.add_to_position(code, fill_price, filled_qty, new_str)
                 alert.trade_buy(
-                    code, price, add_qty,
+                    code, fill_price, filled_qty,
                     sector=config.SECTOR_MAP.get(code, "other"),
                     score=pos.get("total_score"), score_label=pos.get("score_label"),
                     stop_price=pos.get("trail_stop"),
@@ -578,7 +584,7 @@ def run_once(
         alert.info(f"准备买入 {code}，{qty}股 @{price:.4f}，"
                    f"信号强度{cand.signal_strength:.0%}，"
                    f"排名#{entry_rank}")
-        order_id = _place_order(
+        fill = _place_order(
             code=code,
             side="BUY",
             qty=qty,
@@ -587,20 +593,22 @@ def run_once(
             env_label=env_label,
             confirmed=confirmed,
         )
-        if confirmed and order_id:
+        if confirmed and fill["dealt_qty"] > 0:
+            filled_qty = int(fill["dealt_qty"])
+            fill_price = fill["dealt_avg_price"] or price
             # Persist entry_atr so ATR trailing stop can be reconstructed after restart.
             # score_label/total_score persisted too so this position can itself be
             # considered as a future Active Replacement victim (see
             # _attempt_active_replacement above).
-            portfolio.open_position(code, "BUY", price, qty, cand.signal_strength, entry_strategy,
+            portfolio.open_position(code, "BUY", fill_price, filled_qty, cand.signal_strength, entry_strategy,
                                     entry_atr=result.get("atr", 0.0),
                                     score_label=cand.score_label, total_score=cand.total_score)
             alert.trade_buy(
-                code, price, qty,
+                code, fill_price, filled_qty,
                 sector=config.SECTOR_MAP.get(code, "other"),
                 score=cand.total_score, score_label=cand.score_label,
                 stop_price=portfolio.get_position(code).get("trail_stop"),
-                position_pct=(price * qty) / portfolio.total_capital(),
+                position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
                 cash_available=portfolio.available_cash(),
                 position_count=portfolio.position_count(),
                 trade_id=portfolio.next_trade_id(), env=env_label,
@@ -612,9 +620,9 @@ def run_once(
                         trade_id=_trade_id(code, pos_after.get("entry_time")),
                         ticker=code, strategy_name=entry_strategy,
                         strategy_version=config.SYSTEM_VERSION,
-                        direction="LONG", price=price, shares=qty,
-                        position_value=price * qty,
-                        position_pct=(price * qty) / portfolio.total_capital(),
+                        direction="LONG", price=fill_price, shares=filled_qty,
+                        position_value=fill_price * filled_qty,
+                        position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
                         cash=portfolio.available_cash(), equity=portfolio.current_equity(),
                         timestamp=pos_after.get("entry_time"),
                         regime_ctx=_trade_regime_ctx(code, ktype, bars),
@@ -661,39 +669,41 @@ def run_once(
                                f"（目标仓位{config.QQQ_CORE_TARGET_PCT:.0%}，"
                                f"当前{qqq_held_value / portfolio.total_capital():.1%}，"
                                f"站上MA{config.QQQ_MA_PERIOD}）")
-                    order_id = _place_order(
+                    fill = _place_order(
                         code=config.QQQ_CORE_CODE, side="BUY",
                         qty=qty, price=qqq_price,
                         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                     )
-                    if confirmed and order_id:
+                    if confirmed and fill["dealt_qty"] > 0:
+                        filled_qty = int(fill["dealt_qty"])
+                        fill_price = fill["dealt_avg_price"] or qqq_price
                         if qqq_position is not None:
                             # 补仓走pyramid同款的add_to_position——跟2b的scale-in
                             # 一样只更新qty/avg_cost，不新开Trade Intelligence DB
                             # 记录（那条记录的trade_id绑定在原始entry_time上）。
                             portfolio.add_to_position(
-                                config.QQQ_CORE_CODE, qqq_price, qty,
+                                config.QQQ_CORE_CODE, fill_price, filled_qty,
                                 new_strength=1.0, strategy="core_etf",
                             )
                             alert.trade_buy(
-                                config.QQQ_CORE_CODE, qqq_price, qty,
+                                config.QQQ_CORE_CODE, fill_price, filled_qty,
                                 sector="etf", score=None, score_label="CORE_ETF",
                                 stop_price=None,
-                                position_pct=(qqq_held_value + qqq_price * qty) / portfolio.total_capital(),
+                                position_pct=(qqq_held_value + fill_price * filled_qty) / portfolio.total_capital(),
                                 cash_available=portfolio.available_cash(),
                                 position_count=portfolio.position_count(),
                                 trade_id=portfolio.next_trade_id(), env=env_label,
                             )
                         else:
                             portfolio.open_position(
-                                config.QQQ_CORE_CODE, "BUY", qqq_price, qty,
+                                config.QQQ_CORE_CODE, "BUY", fill_price, filled_qty,
                                 signal_strength=1.0, strategy="core_etf",
                             )
                             alert.trade_buy(
-                                config.QQQ_CORE_CODE, qqq_price, qty,
+                                config.QQQ_CORE_CODE, fill_price, filled_qty,
                                 sector="etf", score=None, score_label="CORE_ETF",
                                 stop_price=None,
-                                position_pct=(qqq_price * qty) / portfolio.total_capital(),
+                                position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
                                 cash_available=portfolio.available_cash(),
                                 position_count=portfolio.position_count(),
                                 trade_id=portfolio.next_trade_id(), env=env_label,
@@ -706,9 +716,9 @@ def run_once(
                                                            pos_after.get("entry_time")),
                                         ticker=config.QQQ_CORE_CODE, strategy_name="core_etf",
                                         strategy_version=config.SYSTEM_VERSION,
-                                        direction="LONG", price=qqq_price, shares=qty,
-                                        position_value=qqq_price * qty,
-                                        position_pct=(qqq_price * qty) / portfolio.total_capital(),
+                                        direction="LONG", price=fill_price, shares=filled_qty,
+                                        position_value=fill_price * filled_qty,
+                                        position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
                                         cash=portfolio.available_cash(),
                                         equity=portfolio.current_equity(),
                                         timestamp=pos_after.get("entry_time"),
@@ -925,10 +935,10 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
     victim（不存在合格候选、分数优势不够，或被三个消融过滤门拦截），
     调用方应回退到原有的"容量已满，放弃开仓"行为（break）。
 
-    跟现有退出循环的SELL不同：这里的SELL用BUY侧那种更严格的**order_id
-    成功与否**门控是否调用close_position——SELL静默失败时不会把本地
-    仓位清掉但broker其实没成交，这次置换机会直接作废（返回None），不会
-    强行认为名额已经腾出。dry-run（confirmed=False）下只打日志、不touch
+    跟其余退出路径一样：现在统一按**dealt_qty是否覆盖持仓量**门控是否
+    调用close_position——SELL未成交/未完全成交时不会把本地仓位清掉但
+    broker其实没成交（或只成交一部分），这次置换机会直接作废（返回
+    None），不会强行认为名额已经腾出。dry-run（confirmed=False）下只打日志、不touch
     任何状态，跟runner.py其余下单路径的既有约定一致。
     """
     held = {c: p for c, p in portfolio.data["positions"].items()
@@ -953,17 +963,20 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
 
     alert.warn(f"主动置换：卖出{victim_code}（评分{victim_pos.get('total_score')}）"
                f"为新的满分信号（评分{incoming_score}）腾出仓位")
-    order_id = _place_order(
+    fill = _place_order(
         code=victim_code, side="SELL", qty=victim_pos["qty"], price=victim_price,
         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
     )
-    if confirmed and not order_id:
-        alert.error(f"主动置换卖出{victim_code}失败，置换取消，持仓保持不变")
+    if confirmed and fill["dealt_qty"] < victim_pos["qty"]:
+        alert.error(f"主动置换卖出{victim_code}未完全成交"
+                    f"（{fill['dealt_qty']:.0f}/{victim_pos['qty']}股，{fill['status']}），"
+                    f"置换取消，持仓保持不变")
         return None
-    if confirmed and order_id:
-        closed = portfolio.close_position(victim_code, victim_price, reason="ACTIVE_REPLACEMENT")
+    if confirmed and fill["dealt_qty"] >= victim_pos["qty"]:
+        exit_price = fill["dealt_avg_price"] or victim_price
+        closed = portfolio.close_position(victim_code, exit_price, reason="ACTIVE_REPLACEMENT")
         alert.trade_sell(
-            victim_code, closed["avg_cost"], victim_price, closed["qty"],
+            victim_code, closed["avg_cost"], exit_price, closed["qty"],
             days_held=_days_held(closed.get("entry_time")),
             reason="ACTIVE_REPLACEMENT",
             cash_available=portfolio.available_cash(),
@@ -975,7 +988,7 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
             try:
                 tracker.log_exit(
                     trade_id=_trade_id(victim_code, closed.get("entry_time")),
-                    price=victim_price, cash=portfolio.available_cash(),
+                    price=exit_price, cash=portfolio.available_cash(),
                     equity=portfolio.current_equity(),
                     timestamp=datetime.now().isoformat(),
                     exit_reason="ACTIVE_REPLACEMENT",
@@ -994,12 +1007,15 @@ def _place_order(
     trd_env,
     env_label: str,
     confirmed: bool,
-) -> str:
+) -> dict:
     """
     Place an order via whichever broker engine.broker.get_broker(code)
     resolves for this code (real moomoo order for US/EU codes, virtual
-    paper fill for JP codes — see engine/broker.py). Returns order_id
-    string on success, "" on dry run or failure.
+    paper fill for JP codes — see engine/broker.py). Returns a fill dict
+    {"order_id", "dealt_qty", "dealt_avg_price", "status"} — callers MUST
+    gate on dealt_qty > 0, not on order_id, before touching portfolio state
+    (order_id only means the broker accepted the order, not that it filled;
+    see engine/broker.py module docstring for the incident this fixed).
     """
     broker = get_broker(code)
     return broker.place_order(
