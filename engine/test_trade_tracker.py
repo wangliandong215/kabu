@@ -250,6 +250,114 @@ class TestLogExit(TradeTrackerTestCase):
         self.assertIsNone(attr["regime_drifted"])
 
 
+class TestLogEntryQuality(TradeTrackerTestCase):
+    """v2.9.x Entry Quality Tracking — observation-only snapshot + backfilled
+    forward-return columns. See engine/entry_quality.py."""
+
+    def _open_trade(self, trade_id="US.MSFT_2026-01-01T09:30:00"):
+        self.tracker.log_entry(
+            trade_id=trade_id, ticker="US.MSFT", strategy_name="atr_breakout",
+            strategy_version="2.9", direction="LONG", price=420.0, shares=10,
+            position_value=4200.0, position_pct=0.1,
+            cash=9000.0, equity=10000.0, timestamp="2026-01-01T09:30:00",
+            atr_entry=3.5,
+        )
+        return trade_id
+
+    def test_writes_snapshot_row(self):
+        trade_id = self._open_trade()
+        self.tracker.log_entry_quality(
+            trade_id=trade_id,
+            donchian_breakout_price=415.0,
+            distance_from_breakout_atr=1.4286,
+            distance_from_20d_high=0.01,
+            distance_from_20d_ema=0.05,
+            entry_day_return=0.02,
+            entry_volume_ratio=1.8,
+            atr_expansion_ratio=1.3,
+            rule_score=82.0,
+            confidence_score=None,
+        )
+        row = self._raw("SELECT * FROM trade_entry_quality WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertAlmostEqual(row["donchian_breakout_price"], 415.0)
+        self.assertAlmostEqual(row["distance_from_breakout_atr"], 1.4286)
+        self.assertAlmostEqual(row["rule_score"], 82.0)
+        self.assertIsNone(row["confidence_score"])
+        self.assertIsNone(row["return_5d"])   # not backfilled yet
+        self.assertIsNotNone(row["recorded_at"])
+
+    def test_same_trade_id_overwrites_not_crashes(self):
+        trade_id = self._open_trade()
+        for score in (70.0, 90.0):
+            self.tracker.log_entry_quality(trade_id=trade_id, rule_score=score)
+        rows = self._raw("SELECT * FROM trade_entry_quality WHERE trade_id=?",
+                          (trade_id,))
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0]["rule_score"], 90.0)
+
+    def test_update_forward_returns_fills_existing_row(self):
+        trade_id = self._open_trade()
+        self.tracker.log_entry_quality(trade_id=trade_id, rule_score=80.0)
+        self.tracker.update_forward_returns(
+            trade_id=trade_id, return_5d=0.03, return_10d=0.05,
+            max_favorable_excursion=0.08, max_adverse_excursion=-0.02,
+            forward_bars_available=10,
+        )
+        row = self._raw("SELECT * FROM trade_entry_quality WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertAlmostEqual(row["return_5d"], 0.03)
+        self.assertAlmostEqual(row["return_10d"], 0.05)
+        self.assertIsNone(row["return_20d"])
+        self.assertAlmostEqual(row["rule_score"], 80.0)   # untouched
+        self.assertIsNotNone(row["forward_returns_updated_at"])
+
+    def test_update_forward_returns_on_missing_row_is_noop_not_error(self):
+        # No log_entry_quality() call first — must not raise.
+        self.tracker.update_forward_returns(trade_id="never-logged", return_5d=0.1)
+        rows = self._raw("SELECT * FROM trade_entry_quality")
+        self.assertEqual(len(rows), 0)
+
+    def test_query_entry_quality_joins_trades_and_attribution(self):
+        trade_id = self._open_trade()
+        # re-open with a regime_ctx so trade_attribution has real values
+        self.tracker.log_entry(
+            trade_id=trade_id, ticker="US.MSFT", strategy_name="atr_breakout",
+            strategy_version="2.9", direction="LONG", price=420.0, shares=10,
+            position_value=4200.0, position_pct=0.1, cash=9000.0, equity=10000.0,
+            timestamp="2026-01-01T09:30:00", atr_entry=3.5,
+            regime_ctx={"regime": 2, "regime_label": "LOW_VOL_TREND", "confidence": 75.0},
+        )
+        self.tracker.log_entry_quality(
+            trade_id=trade_id, donchian_breakout_price=415.0,
+            distance_from_breakout_atr=1.4286, rule_score=82.0,
+        )
+        df = self.tracker.query_entry_quality()
+        self.assertEqual(len(df), 1)
+        row = df.iloc[0]
+        self.assertEqual(row["symbol"], "US.MSFT")
+        self.assertAlmostEqual(row["entry_price"], 420.0)
+        self.assertAlmostEqual(row["atr_at_entry"], 3.5)
+        self.assertEqual(row["hmm_state"], "LOW_VOL_TREND")
+        self.assertEqual(row["regime"], 2)
+        self.assertAlmostEqual(row["hmm_confidence"], 75.0)
+        self.assertAlmostEqual(row["donchian_breakout_price"], 415.0)
+
+    def test_query_entry_quality_empty_when_no_rows(self):
+        df = self.tracker.query_entry_quality()
+        self.assertTrue(df.empty)
+
+    def test_exports_to_csv(self):
+        trade_id = self._open_trade()
+        self.tracker.log_entry_quality(trade_id=trade_id, rule_score=80.0)
+        out_path = Path(self._tmpdir.name) / "eq.csv"
+        self.tracker.export_csv("trade_entry_quality", out_path)
+        with open(out_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["trade_id"], trade_id)
+
+
 class TestBuildRegimeCtx(unittest.TestCase):
 
     def test_valid_df_returns_dict_with_enum_name_label(self):

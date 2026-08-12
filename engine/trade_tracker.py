@@ -215,6 +215,38 @@ CREATE TABLE IF NOT EXISTS trade_market_context (
     naaim_date           TEXT,
     data_status          TEXT
 );
+
+-- v2.9.x — Entry Quality Tracking (see engine/entry_quality.py). One row per
+-- trade, OBSERVATION ONLY: nothing in this codebase reads these columns to
+-- gate/scale a BUY/SELL — they exist purely so distance-from-breakout /
+-- "chased the breakout" behavior (recent MSFT/PLTR cases) can be studied
+-- offline via analyze_entry_quality.py before any Confidence Score /
+-- Dynamic Position Sizing is designed. symbol/entry_price/entry_time/
+-- atr_at_entry/hmm_state/regime are deliberately NOT duplicated here — they
+-- already exist on trades.ticker/entry_price/entry_time/atr_entry and
+-- trade_attribution.entry_regime_label/entry_regime; query_entry_quality()
+-- joins them in rather than this table re-declaring them.
+CREATE TABLE IF NOT EXISTS trade_entry_quality (
+    trade_id                    TEXT PRIMARY KEY REFERENCES trades(trade_id),
+    donchian_breakout_price     REAL,
+    distance_from_breakout_atr  REAL,
+    distance_from_20d_high      REAL,
+    distance_from_20d_ema       REAL,
+    entry_day_return            REAL,
+    entry_volume_ratio          REAL,
+    atr_expansion_ratio         REAL,
+    rule_score                  REAL,
+    confidence_score            REAL,
+    recorded_at                 TEXT,
+    return_5d                   REAL,
+    return_10d                  REAL,
+    return_20d                  REAL,
+    return_60d                  REAL,
+    max_favorable_excursion     REAL,
+    max_adverse_excursion       REAL,
+    forward_bars_available      INTEGER,
+    forward_returns_updated_at  TEXT
+);
 """
 
 
@@ -515,6 +547,95 @@ class TradeTracker:
             )
             self._conn.commit()
 
+    def log_entry_quality(self, trade_id: str,
+                           donchian_breakout_price: Optional[float] = None,
+                           distance_from_breakout_atr: Optional[float] = None,
+                           distance_from_20d_high: Optional[float] = None,
+                           distance_from_20d_ema: Optional[float] = None,
+                           entry_day_return: Optional[float] = None,
+                           entry_volume_ratio: Optional[float] = None,
+                           atr_expansion_ratio: Optional[float] = None,
+                           rule_score: Optional[float] = None,
+                           confidence_score: Optional[float] = None,
+                           timestamp: Optional[str] = None) -> None:
+        """v2.9.x Entry Quality Tracking — see engine/entry_quality.py's
+        module docstring for the observation-only contract this is part of.
+        Typically called with **engine.entry_quality.
+        build_entry_quality_snapshot()'s return dict. INSERT OR REPLACE for
+        the same idempotency reason as log_entry() (safe to re-run)."""
+        ts = timestamp or datetime.now().isoformat()
+        with _write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO trade_entry_quality (
+                    trade_id, donchian_breakout_price, distance_from_breakout_atr,
+                    distance_from_20d_high, distance_from_20d_ema, entry_day_return,
+                    entry_volume_ratio, atr_expansion_ratio, rule_score,
+                    confidence_score, recorded_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (trade_id, donchian_breakout_price, distance_from_breakout_atr,
+                 distance_from_20d_high, distance_from_20d_ema, entry_day_return,
+                 entry_volume_ratio, atr_expansion_ratio, rule_score,
+                 confidence_score, ts),
+            )
+            self._conn.commit()
+
+    def update_forward_returns(self, trade_id: str,
+                                return_5d: Optional[float] = None,
+                                return_10d: Optional[float] = None,
+                                return_20d: Optional[float] = None,
+                                return_60d: Optional[float] = None,
+                                max_favorable_excursion: Optional[float] = None,
+                                max_adverse_excursion: Optional[float] = None,
+                                forward_bars_available: Optional[int] = None,
+                                timestamp: Optional[str] = None) -> None:
+        """v2.9.x — backfilled later by analyze_entry_quality.py once enough
+        calendar time has passed after entry (see
+        engine.entry_quality.compute_forward_returns()). UPDATE only, no
+        INSERT: a trade_entry_quality row must already exist from
+        log_entry_quality() — if it doesn't (e.g. entry predates this
+        feature, or log_entry_quality failed at entry time), this is a
+        silent 0-row no-op rather than an error, matching
+        update_position_metrics()'s never-raise contract for the same
+        "called far more often than a trading decision" reason."""
+        ts = timestamp or datetime.now().isoformat()
+        with _write_lock:
+            self._conn.execute(
+                """UPDATE trade_entry_quality SET
+                    return_5d=?, return_10d=?, return_20d=?, return_60d=?,
+                    max_favorable_excursion=?, max_adverse_excursion=?,
+                    forward_bars_available=?, forward_returns_updated_at=?
+                   WHERE trade_id=?""",
+                (return_5d, return_10d, return_20d, return_60d,
+                 max_favorable_excursion, max_adverse_excursion,
+                 forward_bars_available, ts, trade_id),
+            )
+            self._conn.commit()
+
+    def query_entry_quality(self) -> pd.DataFrame:
+        """v2.9.x — one row per trade_entry_quality row, joined against the
+        trades/trade_attribution columns it deliberately doesn't duplicate
+        (see trade_entry_quality's schema comment). Used by
+        analyze_entry_quality.py; not called from any trading path."""
+        query = """
+            SELECT
+                t.trade_id, t.ticker AS symbol, t.entry_price, t.entry_time,
+                t.atr_entry AS atr_at_entry, t.exit_time, t.exit_price,
+                t.pnl, t.pnl_pct, t.exit_reason_code, t.strategy_name,
+                a.entry_regime AS regime, a.entry_regime_label AS hmm_state,
+                a.entry_confidence AS hmm_confidence,
+                q.donchian_breakout_price, q.distance_from_breakout_atr,
+                q.distance_from_20d_high, q.distance_from_20d_ema,
+                q.entry_day_return, q.entry_volume_ratio, q.atr_expansion_ratio,
+                q.rule_score, q.confidence_score,
+                q.return_5d, q.return_10d, q.return_20d, q.return_60d,
+                q.max_favorable_excursion, q.max_adverse_excursion,
+                q.forward_bars_available, q.recorded_at, q.forward_returns_updated_at
+            FROM trade_entry_quality q
+            JOIN trades t ON t.trade_id = q.trade_id
+            LEFT JOIN trade_attribution a ON a.trade_id = q.trade_id
+        """
+        return pd.read_sql_query(query, self._conn)
+
     def log_run_metadata(self, run_id: Optional[str] = None,
                           strategy_version: Optional[str] = None,
                           market: Optional[str] = None,
@@ -552,7 +673,8 @@ class TradeTracker:
             self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     _EXPORTABLE_TABLES = {"trades", "trade_attribution", "trade_events",
-                           "trade_daily", "metadata", "trade_market_context"}
+                           "trade_daily", "metadata", "trade_market_context",
+                           "trade_entry_quality"}
 
     def export_csv(self, table: str, path) -> None:
         """v2.8 — dump one table to CSV. `table` is checked against a fixed

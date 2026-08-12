@@ -25,6 +25,7 @@ from engine.scanner import scan, smart_scan
 from engine import news as news_sentiment
 from engine import pipeline
 from engine import scoring
+from engine import entry_quality
 from engine import regime
 from engine import market_weather
 from engine import market_context
@@ -642,6 +643,29 @@ def run_once(
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_market_context failed {code} — {exc}")
+                try:
+                    # v2.9.x Entry Quality Tracking — observation only, see
+                    # engine/entry_quality.py's module docstring. Re-fetches
+                    # kline (same bounded, try/except-wrapped pattern as
+                    # _trade_regime_ctx's fallback fetch above) rather than
+                    # threading `df` through scan()/pipeline.py, so this can
+                    # never perturb the signal/candidate data those use.
+                    from data.fetcher import fetch_kline
+                    df_eq = fetch_kline(code, ktype=ktype, bars=bars)
+                    snapshot = entry_quality.build_entry_quality_snapshot(
+                        df_eq, entry_price=fill_price,
+                        donchian_breakout_price=result.get("donchian_high"),
+                        atr_at_entry=result.get("atr"),
+                        rule_score=cand.total_score,
+                        confidence_score=cand.confidence,
+                    )
+                    if snapshot is not None:
+                        tracker.log_entry_quality(
+                            trade_id=_trade_id(code, pos_after.get("entry_time")),
+                            **snapshot,
+                        )
+                except Exception as exc:
+                    alert.log(f"trade_tracker: log_entry_quality failed {code} — {exc}")
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，站上MA200时买入/补仓到目标比例 ──────
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
