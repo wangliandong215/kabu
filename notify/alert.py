@@ -63,7 +63,17 @@ def _emit(level: str, msg: str) -> None:
     _push_all(msg, prefix="")
 
 
+def _is_muted() -> bool:
+    """True while config.NOTIFY_MUTE_FILE exists — checked fresh on every
+    push so a running process can be paused/resumed by touching/deleting the
+    file, no restart needed."""
+    mute_file = getattr(config, "NOTIFY_MUTE_FILE", "")
+    return bool(mute_file) and Path(mute_file).exists()
+
+
 def _push_all(msg: str, prefix: str = "[kabu] ") -> None:
+    if _is_muted():
+        return
     _push_dingtalk(msg, prefix)
     _push_telegram(msg, prefix)
 

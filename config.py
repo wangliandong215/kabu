@@ -61,6 +61,7 @@ WATCHLIST_EUROPE_US: list = [
     "US.STM",   # STMicroelectronics 意法半导体
     "US.TSEM",  # Tower Semiconductor Tower半导体
     "US.TSM",   # TSMC ADR 台积电
+    "US.SKHY",  # SK Hynix ADR SK海力士（HBM/存储）
     "US.LSCC",  # Lattice Semiconductor FPGA
     "US.CRDO",  # Credo Technology Chiplet/连接芯片
 
@@ -185,11 +186,16 @@ WATCHLIST_EUROPE_US: list = [
     "US.AEP",   # American Electric Power
     "US.XEL",   # Xcel Energy
 
+    # Real Estate / Income
+    "US.O",     # Realty Income REIT
+
     # ETF (index tracking)
     "US.QQQ",   # NASDAQ-100 ETF
     "US.SPY",   # S&P 500 ETF
     "US.VOO",   # Vanguard S&P 500 ETF
     "US.RSP",   # Invesco S&P 500 Equal Weight ETF
+    "US.MAGS",  # Roundhill Magnificent Seven ETF
+    "US.SPMO",  # Invesco S&P 500 Momentum ETF
 
     # ETF (sector / thematic)
     "US.IGV",   # iShares Expanded Tech-Software ETF
@@ -204,6 +210,8 @@ WATCHLIST_EUROPE_US: list = [
     "US.UFO",   # Procure Space ETF
     "US.DRAM",  # Roundhill Memory ETF
     "US.JEPI",  # JPMorgan Equity Premium Income ETF
+    "US.SDIV",  # Global X SuperDividend ETF 超级红利ETF
+    "US.LAZR",  # Tema Photonics & Optical ETF 光学/光子学主题
 
     # ETF (commodity / mining)
     "US.GLD",   # SPDR Gold Shares
@@ -238,6 +246,7 @@ WATCHLIST_ASIA_PACIFIC: list = [
     "JP.6976",  # 太阳诱电 Taiyo Yuden
     "JP.6762",  # TDK
     "JP.6971",  # 京瓷 Kyocera
+    "JP.6890",  # Ferrotec控股 Ferrotec Holdings
 
     # 消费电子 & 精密仪器
     "JP.6758",  # 索尼集团 Sony Group
@@ -257,7 +266,12 @@ WATCHLIST_ASIA_PACIFIC: list = [
     "JP.6594",  # 日本电产 Nidec
     "JP.9984",  # 软银集团 SoftBank Group
 
+    # 重工业 & 国防
+    "JP.7011",  # 三菱重工 Mitsubishi Heavy Industries
+    "JP.7012",  # 川崎重工 Kawasaki Heavy Industries
+
     # 汽车 & 零部件
+    "JP.7203",  # 丰田汽车 Toyota Motor
     "JP.6902",  # 电装 Denso
     "JP.7270",  # 斯巴鲁 Subaru
     "JP.7267",  # 本田技研工业 Honda Motor
@@ -287,6 +301,9 @@ WATCHLIST_ASIA_PACIFIC: list = [
     "JP.9101",  # 日本邮船 NYK Line
     "JP.9104",  # 商船三井 MOL
     "JP.9107",  # 川崎汽船 K Line
+
+    # 游戏 & 娱乐
+    "JP.7974",  # 任天堂 Nintendo
 
 ]
 
@@ -920,6 +937,12 @@ API_RETRY_BACKOFF:       float = 2.0   # delay *= this after each failed attempt
 # Set env var KABU_DINGTALK_WEBHOOK to receive DingTalk alerts.
 DINGTALK_WEBHOOK: str = os.getenv("KABU_DINGTALK_WEBHOOK", "")
 
+# When this file exists, notify/alert.py skips DingTalk/Telegram pushes (phone
+# notifications) while still printing/logging to console and kabu.log. Checked
+# live on every push, so touch/delete it to pause/resume without restarting
+# the bot. Create/remove with: New-Item / Remove-Item on this path.
+NOTIFY_MUTE_FILE: str = r"C:\KabuData\notify_paused.flag"
+
 # Set env vars KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID to receive Telegram alerts.
 TELEGRAM_BOT_TOKEN: str = os.getenv("KABU_TELEGRAM_BOT_TOKEN", "")
 
@@ -954,3 +977,46 @@ TELEGRAM_CHAT_IDS: list = [c.strip() for c in TELEGRAM_CHAT_ID.split(",") if c.s
 # per-strategy versioning doesn't exist yet, so this project-wide version
 # string is used as a proxy for "which codebase version produced this trade".
 SYSTEM_VERSION: str = "2.8"
+
+# ── Mean Reversion Research (v2.9.x, observation-only) ──────────────────────
+# Standalone research/observation layer (research/ package) that records
+# extreme-oversold candidate events (price extremity, oversold indicators,
+# volume/panic, candle stabilization, HMM regime, market environment,
+# fundamentals, crash reason, forward returns) for later offline analysis of
+# whether a Mean Reversion strategy is viable. Nothing here is read by
+# engine/runner.py, strategies/*, risk/*, or portfolio/* — these constants
+# only ever affect what gets RECORDED, never a trading decision. See
+# research/scan_mean_reversion_candidates.py (module docstring) for the full
+# rationale and project spec reference.
+MR_DB_PATH: str = r"C:\KabuData\research\mean_reversion_observations.db"
+
+# Recording trigger — ANY one of these firing is enough to log a candidate
+# event for a stock on a given day. Deliberately loose ("wide net") so the
+# dataset isn't pre-filtered toward already-known-good setups (see spec
+# section 特别注意: must also capture cases that didn't rebound). This ONLY
+# decides whether a row gets written — it is never checked by any BUY/SELL
+# code path.
+MR_TRIGGER_RETURN_3D:     float = -0.08   # 3-day close-to-close return <= this
+MR_TRIGGER_RETURN_5D:     float = -0.12   # 5-day close-to-close return <= this
+MR_TRIGGER_RSI14:         float = 30.0    # RSI(14) <= this
+MR_TRIGGER_GAP_DOWN:      float = -0.05   # single-day gap-down (open vs prior close) <= this
+MR_TRIGGER_COOLDOWN_DAYS: int   = 15      # trading days before the same code can re-trigger
+                                           # a NEW event (avoids one selloff spawning dozens
+                                           # of overlapping forward-return windows)
+
+# Outcome labeling (category 9) — purely descriptive, computed AFTER the
+# fact from T+10 forward return once enough bars have passed. Never fed back
+# into detection/trigger logic above.
+MR_OUTCOME_SUCCESS_RETURN_10D: float = 0.08    # T+10 return >= this -> outcome_label=SUCCESS
+MR_OUTCOME_FAILURE_RETURN_10D: float = -0.08   # T+10 return <= this -> outcome_label=FAILURE
+
+# Fundamentals (category 7) change slowly — cached this many days so the
+# daily scan doesn't re-hit moomoo's valuation/financials endpoints for
+# every watchlist stock every day.
+MR_FUNDAMENTALS_CACHE_TTL_DAYS: int = 7
+
+# Crash-reason heuristic (category 8) thresholds — rule-based only, never
+# distinguishes EARNINGS/GUIDANCE/NEWS (no data source for those; those
+# three stay manual-annotation-only, see research/annotate_event.py).
+MR_CRASH_MARKET_SELLOFF_3D: float = -0.03   # SPY 3D return <= this -> market-wide selloff
+MR_CRASH_SECTOR_SELLOFF_3D: float = -0.05   # sector ETF 3D return <= this -> sector selloff
