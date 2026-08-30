@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 import config
+import notify.alert as alert
 
 
 _DEFAULT_PATH = Path(r"C:\KabuData\portfolio\positions.json")
@@ -158,6 +159,39 @@ class Portfolio:
         if strategy is not None:
             pos["strategy"] = strategy
         self._save()
+
+    def reduce_position(self, code: str, exit_price: float, sell_qty: int,
+                        reason: str = "") -> dict:
+        """Partial sell (v2.10 Portfolio Risk Manager rebalance trims):
+        reduces qty, books realized P&L for the sold portion, keeps
+        avg_cost unchanged. If sell_qty >= tracker's recorded qty — which
+        can legitimately happen, since the broker (ground truth for
+        rebalance sizing) can hold more shares than tracker.json knows
+        about, see config.py's Portfolio Risk Manager comment — fully
+        closes via close_position() instead and logs it as evidence of a
+        reconciliation gap rather than silently clamping."""
+        pos = self.data["positions"].get(code)
+        if pos is None:
+            return {}
+        if sell_qty >= pos["qty"]:
+            if sell_qty > pos["qty"]:
+                alert.error(f"tracker.reduce_position: {code} 卖出{sell_qty}股 "
+                            f"超过本地记录持仓{pos['qty']}股——本地账本与broker"
+                            f"存在差异，已按本地全部持仓平仓，差额部分broker侧"
+                            f"已实际卖出但本地无对应记录")
+            return self.close_position(code, exit_price, reason=reason)
+
+        old_qty  = pos["qty"]
+        avg_cost = pos["avg_cost"]
+        pnl = (exit_price - avg_cost) * sell_qty
+        if pos["side"] == "SELL":
+            pnl = -pnl
+        self.data["realized_pnl"] = self.data.get("realized_pnl", 0.0) + pnl
+        pos["qty"] = old_qty - sell_qty
+        self._update_peak_equity()
+        self._save()
+        return {**pos, "qty": sell_qty, "avg_cost": avg_cost,
+                "exit_price": exit_price, "pnl": round(pnl, 4)}
 
     def close_position(self, code: str, exit_price: float, reason: str = "") -> dict:
         """Remove position, accumulate realized P&L, return trade summary."""

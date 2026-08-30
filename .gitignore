@@ -38,6 +38,10 @@ engine/hmm_models/
 engine/regime_state.json
 engine/regime_shadow_log.csv
 
+# moomooapi skill script outputs (ad-hoc query results, not source)
+.claude/skills/moomooapi/scripts/**/*.json
+.claude/skills/moomooapi/scripts/**/*.err
+
 # Editor/OS
 .vscode/
 .idea/
