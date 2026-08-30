@@ -15,6 +15,21 @@ Usage:
   from engine.news import apply_filter, pre_market_scores
   result = apply_filter("US.NVDA", buy_result)   # returns None if blocked
   scores = pre_market_scores(["US.NVDA", "US.CEG"])  # pre-market batch
+
+Timezone note (v2.11.1 audit): `publish_time` is a 'YYYY-MM-DD HH:MM:SS'
+string with no timezone marker from moomoo — treated as US Eastern (the
+convention news wire services report in), compared directly against
+`datetime.now() - timedelta(...)` in _fetch()/research_snapshot(), which is
+itself JST server wall-clock time, NOT converted. This is an existing,
+pre-v2.11.1 imprecision (up to ~13h of slop around the JST/ET offset) in
+the LOOKBACK_DAYS=3 circuit-breaker window and CACHE_TTL — harmless there
+since both are multi-hour/multi-day windows. research_snapshot()'s 24h
+cutoff (used for Research's news_count_24h, not for any trading decision)
+inherits the same imprecision; documented here rather than silently
+"fixed" by reinterpreting a field whose original semantics were never
+pinned down to begin with. No look-ahead risk either way: publish_time is
+always a moment already in the past relative to whenever _fetch() runs, in
+every timezone interpretation.
 """
 import time
 from datetime import datetime, timedelta
@@ -164,6 +179,37 @@ def apply_filter(code: str, result: dict) -> Optional[dict]:
     return result
 
 
+def research_snapshot(code: str) -> dict:
+    """
+    Research-only news snapshot for research/collect_market_features.py —
+    reuses _fetch() (the same OpenD get_search_news() call apply_filter()
+    already makes) instead of opening a second news-fetch channel for the
+    same ticker. Purely observational: never called from the trading path.
+
+    Returns {news_count_24h, major_news_flag, announcement_flag}.
+    """
+    headlines = _fetch(code)
+    cutoff = datetime.now() - timedelta(hours=24)
+
+    recent = []
+    for h in headlines:
+        try:
+            pub_dt = datetime.strptime(str(h.get("publish_time", ""))[:19], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        if pub_dt >= cutoff:
+            recent.append(h)
+
+    major = any(t in h["source"] for h in recent for t in _HIGH_TRUST_SOURCES) \
+        or bool(check_circuit_breaker(recent))
+    announcement = any("notice" in h["sub_type"] for h in recent)
+    return {
+        "news_count_24h": len(recent),
+        "major_news_flag": major,
+        "announcement_flag": announcement,
+    }
+
+
 def pre_market_scores(codes: List[str]) -> Dict[str, float]:
     """
     Batch pre-market news scoring (run once before session open).
@@ -214,7 +260,7 @@ def _fetch(code: str) -> List[dict]:
     """
     Fetch recent news from moomoo OpenD.
     Returns ALL source-filtered, in-recency headlines as
-    {"title": str, "source": str, "sub_type": str}.
+    {"title": str, "source": str, "sub_type": str, "publish_time": str}.
 
     NOTE: keyword pre-filtering is intentionally NOT done here.
     Circuit breaker must see every headline before keywords narrow the set.
@@ -253,9 +299,10 @@ def _fetch(code: str) -> List[dict]:
                     pass
 
                 results.append({
-                    "title":    title,
-                    "source":   source,
-                    "sub_type": sub_type,
+                    "title":        title,
+                    "source":       source,
+                    "sub_type":     sub_type,
+                    "publish_time": pub,
                 })
         finally:
             ctx.close()

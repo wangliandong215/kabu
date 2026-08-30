@@ -6,9 +6,22 @@ import functools
 import socket
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
 import config
+
+
+def utc_now_iso() -> str:
+    """Current time as UTC ISO 8601 (e.g. '2026-08-30T02:15:30.123456+00:00').
+
+    The server's OS timezone is JST (confirmed 2026-08-30 — Windows
+    TimeZoneId 'Tokyo Standard Time'), so a bare `datetime.now().isoformat()`
+    silently returns JST wall-clock time with no timezone marker attached.
+    Research tables use this for their `observed_at` column instead, so
+    "when was this actually fetched" is unambiguous regardless of what
+    timezone the server ever runs in."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _check_opend(host: str, port: int) -> None:

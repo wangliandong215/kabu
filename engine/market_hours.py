@@ -266,6 +266,59 @@ def _is_us_trading_day(d: date) -> bool:
     return d.weekday() < 5 and d not in _US_HOLIDAYS
 
 
+def is_trading_day(code: str, d: date) -> bool:
+    """True if `d` is a trading day (weekday, not a market holiday) for the
+    market `code` belongs to. Holiday-only check, no time-of-day — additive
+    helper for callers that need to count trading-day distance (e.g.
+    engine/event_risk.py's earnings-window math), does not touch is_open()."""
+    market = code.split(".")[0] if "." in code else "US"
+    if market == "JP":
+        return d.weekday() < 5 and d not in _JP_HOLIDAYS
+    return _is_us_trading_day(d)
+
+
+def market_date_for(code: str, now: datetime = None) -> date:
+    """The trading-calendar date `code`'s home market data should be
+    attributed to at moment `now` (default: current JST time) — for
+    Research snapshot rows, NOT for is_open()'s live go/no-go decision.
+
+    Distinct from is_open()'s question ("can I trade right now") this
+    answers "which calendar day does this observation belong to", which
+    still has a sensible answer while the market is closed (research
+    collection runs once daily at 07:15 JST, squarely in the JST daytime
+    gap between one US session's close and the next one's open — see
+    module docstring for the session-crossing-midnight shape).
+
+    US: reuses _US_SUMMER/WINTER_OPEN/CLOSE + is_us_dst() +
+    _is_us_trading_day() (no new holiday/DST logic). If a session is live
+    right now, returns that session's own opening date (mirrors
+    _in_us_session()'s branching). Otherwise walks backward from "yesterday
+    if we haven't reached tonight's open yet, else today" to the nearest
+    actual US trading day — i.e. the most recently completed session.
+
+    JP: sessions never cross midnight, so this is just is_trading_day()
+    walked backward to the nearest match."""
+    if now is None:
+        now = datetime.now(_JST)
+    elif now.tzinfo is None:
+        now = _JST.localize(now)
+
+    market = code.split(".")[0] if "." in code else "US"
+    d = now.date()
+
+    if market == "JP":
+        while not is_trading_day(code, d):
+            d -= timedelta(days=1)
+        return d
+
+    dst = is_us_dst(d)
+    open_ = _US_SUMMER_OPEN if dst else _US_WINTER_OPEN
+    candidate = d if now.time() >= open_ else d - timedelta(days=1)
+    while not _is_us_trading_day(candidate):
+        candidate -= timedelta(days=1)
+    return candidate
+
+
 def just_closed(minutes_after: int = 5, now: datetime = None) -> bool:
     """True once `now` (defaults to current JST time) is at or past
     `minutes_after` past today's US market close — used to fire a one-time

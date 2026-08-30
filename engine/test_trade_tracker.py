@@ -358,6 +358,84 @@ class TestLogEntryQuality(TradeTrackerTestCase):
         self.assertEqual(rows[0]["trade_id"], trade_id)
 
 
+class TestLogResearchSnapshot(TradeTrackerTestCase):
+    """v2.11.1 — permanent, write-once Trade Research Snapshot. See
+    engine/research_snapshot.py and trade_research_snapshot's schema
+    comment for the immutability contract under test here."""
+
+    def _open_trade(self, trade_id="US.MSFT_2026-01-01T09:30:00"):
+        self.tracker.log_entry(
+            trade_id=trade_id, ticker="US.MSFT", strategy_name="atr_breakout",
+            strategy_version="2.9", direction="LONG", price=420.0, shares=10,
+            position_value=4200.0, position_pct=0.1,
+            cash=9000.0, equity=10000.0, timestamp="2026-01-01T09:30:00",
+        )
+        return trade_id
+
+    def test_writes_full_snapshot_row(self):
+        trade_id = self._open_trade()
+        self.tracker.log_research_snapshot(trade_id, {
+            "signal_time": "2026-01-01T09:30:00",
+            "observed_at": "2026-01-01T00:30:00+00:00",
+            "market_date": "2025-12-31",
+            "rsi14": 28.5, "atr": 3.5, "current_price": 420.0,
+            "signal_strength": 0.9, "total_score": 88.0, "confidence_score": 0.7,
+            "has_earnings_risk": 0, "days_to_earnings": 12,
+            "earnings_date": "2026-01-13", "earnings_session": "AMC",
+            "news_count_24h": 3, "news_observed_at": "2026-01-01T00:15:00+00:00",
+            "iv": 32.0, "hv_30d": 28.0, "put_call_ratio": 0.6,
+            "options_observed_at": "2026-01-01T00:15:00+00:00",
+            "fedwatch_target_range": "4.00-4.25", "fedwatch_probability": 0.6,
+            "fedwatch_observed_at": "2026-01-01T00:15:00+00:00",
+        })
+        row = self._raw("SELECT * FROM trade_research_snapshot WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertEqual(row["signal_time"], "2026-01-01T09:30:00")
+        self.assertAlmostEqual(row["rsi14"], 28.5)
+        self.assertEqual(row["has_earnings_risk"], 0)
+        self.assertEqual(row["days_to_earnings"], 12)
+        self.assertEqual(row["earnings_session"], "AMC")
+        self.assertAlmostEqual(row["put_call_ratio"], 0.6)
+        self.assertIsNotNone(row["created_at"])
+
+    def test_missing_research_fields_are_null_not_errors(self):
+        trade_id = self._open_trade()
+        self.tracker.log_research_snapshot(trade_id, {
+            "signal_time": "2026-01-01T09:30:00",
+            "rsi14": 55.0,
+            # every Research Features field omitted — simulates "no
+            # market_features row existed yet as of signal_time"
+        })
+        row = self._raw("SELECT * FROM trade_research_snapshot WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertAlmostEqual(row["rsi14"], 55.0)
+        self.assertIsNone(row["news_count_24h"])
+        self.assertIsNone(row["iv"])
+        self.assertIsNone(row["fedwatch_target_range"])
+
+    def test_duplicate_trade_id_raises_and_does_not_overwrite(self):
+        trade_id = self._open_trade()
+        self.tracker.log_research_snapshot(trade_id, {"rsi14": 28.5})
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.tracker.log_research_snapshot(trade_id, {"rsi14": 99.0})
+
+        row = self._raw("SELECT * FROM trade_research_snapshot WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertAlmostEqual(row["rsi14"], 28.5,
+                                "the original snapshot must survive a rejected second write")
+
+    def test_exports_to_csv(self):
+        trade_id = self._open_trade()
+        self.tracker.log_research_snapshot(trade_id, {"rsi14": 40.0})
+        out_path = Path(self._tmpdir.name) / "snapshot.csv"
+        self.tracker.export_csv("trade_research_snapshot", out_path)
+        with open(out_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["trade_id"], trade_id)
+
+
 class TestBuildRegimeCtx(unittest.TestCase):
 
     def test_valid_df_returns_dict_with_enum_name_label(self):

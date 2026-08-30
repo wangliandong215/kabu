@@ -247,6 +247,46 @@ CREATE TABLE IF NOT EXISTS trade_entry_quality (
     forward_bars_available      INTEGER,
     forward_returns_updated_at  TEXT
 );
+
+-- v2.11.1 — Trade Research Snapshot (see engine/research_snapshot.py). One
+-- row per trade_id, WRITTEN ONCE AND NEVER UPDATED: "what did the system
+-- actually see at the moment this trade fired" — strategy indicators
+-- already computed for the signal, Event Risk state, and whatever Research
+-- Market Features rows were already observed_at <= this trade's
+-- signal_time (see research/market_features_store.py's latest_before()).
+-- A later research re-fetch, a revised macro figure, or a correction must
+-- never retroactively change what this row says was known at trade time —
+-- log_research_snapshot() below enforces that with a plain INSERT (no
+-- INSERT OR REPLACE): a second attempt for the same trade_id raises rather
+-- than silently overwriting. Nothing in this codebase reads these columns
+-- to gate/scale a BUY/SELL — same observation-only contract as
+-- trade_market_context/trade_entry_quality above.
+CREATE TABLE IF NOT EXISTS trade_research_snapshot (
+    trade_id               TEXT PRIMARY KEY REFERENCES trades(trade_id),
+    signal_time             TEXT,
+    observed_at             TEXT,
+    market_date             TEXT,
+    rsi14                   REAL,
+    atr                     REAL,
+    current_price           REAL,
+    signal_strength         REAL,
+    total_score             REAL,
+    confidence_score        REAL,
+    has_earnings_risk       INTEGER,
+    days_to_earnings        INTEGER,
+    earnings_date           TEXT,
+    earnings_session        TEXT,
+    news_count_24h          INTEGER,
+    news_observed_at        TEXT,
+    iv                      REAL,
+    hv_30d                  REAL,
+    put_call_ratio          REAL,
+    options_observed_at     TEXT,
+    fedwatch_target_range   TEXT,
+    fedwatch_probability    REAL,
+    fedwatch_observed_at    TEXT,
+    created_at              TEXT
+);
 """
 
 
@@ -579,6 +619,41 @@ class TradeTracker:
             )
             self._conn.commit()
 
+    _RESEARCH_SNAPSHOT_COLUMNS = [
+        "signal_time", "observed_at", "market_date", "rsi14", "atr",
+        "current_price", "signal_strength", "total_score", "confidence_score",
+        "has_earnings_risk", "days_to_earnings", "earnings_date",
+        "earnings_session", "news_count_24h", "news_observed_at", "iv",
+        "hv_30d", "put_call_ratio", "options_observed_at",
+        "fedwatch_target_range", "fedwatch_probability", "fedwatch_observed_at",
+    ]
+
+    def log_research_snapshot(self, trade_id: str, snapshot: dict) -> None:
+        """v2.11.1 — permanently record "what the system saw" at trade time.
+        See trade_research_snapshot's schema comment: plain INSERT, NOT
+        INSERT OR REPLACE — calling this twice for the same trade_id raises
+        sqlite3.IntegrityError rather than silently overwriting an already-
+        recorded snapshot. Callers (engine/runner.py's BUY-fill hook) wrap
+        this in try/except and alert.log() on failure, same as every other
+        best-effort tracker hook in this file — a duplicate-write bug must
+        surface in the log, never as data corruption, and must never break
+        the trading pass that already completed by the time this runs.
+
+        `snapshot` is typically engine.research_snapshot.
+        build_trade_research_snapshot()'s return dict — unknown/missing keys
+        are simply left NULL, matching log_entry_quality()'s convention."""
+        ts = datetime.now().isoformat()
+        cols = ["trade_id", *self._RESEARCH_SNAPSHOT_COLUMNS, "created_at"]
+        values = [trade_id] + [snapshot.get(c) for c in self._RESEARCH_SNAPSHOT_COLUMNS] + [ts]
+        placeholders = ", ".join("?" for _ in cols)
+        with _write_lock:
+            self._conn.execute(
+                f"INSERT INTO trade_research_snapshot ({', '.join(cols)}) "
+                f"VALUES ({placeholders})",
+                tuple(values),
+            )
+            self._conn.commit()
+
     def update_forward_returns(self, trade_id: str,
                                 return_5d: Optional[float] = None,
                                 return_10d: Optional[float] = None,
@@ -674,7 +749,7 @@ class TradeTracker:
 
     _EXPORTABLE_TABLES = {"trades", "trade_attribution", "trade_events",
                            "trade_daily", "metadata", "trade_market_context",
-                           "trade_entry_quality"}
+                           "trade_entry_quality", "trade_research_snapshot"}
 
     def export_csv(self, table: str, path) -> None:
         """v2.8 — dump one table to CSV. `table` is checked against a fixed

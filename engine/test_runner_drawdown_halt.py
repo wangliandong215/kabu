@@ -24,7 +24,15 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
+
+# v2.10 Portfolio Risk Manager queries the real broker every run_once() pass
+# — stub it to a comfortably-under-95%-exposure state so this pre-existing
+# drawdown_halt/macro_block test stays hermetic and unaffected by the new
+# feature.
+_NO_RISK_BROKER_STATE = BrokerState(positions={}, cash=1_000_000.0,
+                                     total_assets=1_000_000.0, long_mv=0.0)
 
 
 class _FakeTracker:
@@ -55,8 +63,14 @@ class TestDrawdownHaltStillRunsExitCheck(unittest.TestCase):
             "trade_buy": runner.alert.trade_buy,
             "TradeTracker": runner.TradeTracker,
             "fetch_kline": fetcher_mod.fetch_kline,
+            "fetch_broker_state": runner.broker_state_mod.fetch_broker_state,
+            "has_earnings_risk": runner.event_risk.has_earnings_risk,
+            "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
         }
 
+        runner.broker_state_mod.fetch_broker_state = lambda trd_env: _NO_RISK_BROKER_STATE
+        runner.event_risk.has_earnings_risk = lambda code, trade_date=None: False
+        runner.research_snapshot.build_trade_research_snapshot = lambda *a, **kw: {}
         runner.Portfolio = lambda: Portfolio(path=self.portfolio_path)
         runner.filter_open = lambda codes: list(codes)  # pretend everything's open
         runner.news_sentiment.macro_circuit_breaker = lambda: ""  # no news breaker
@@ -89,6 +103,9 @@ class TestDrawdownHaltStillRunsExitCheck(unittest.TestCase):
         runner.alert.trade_buy = self._orig["trade_buy"]
         runner.TradeTracker = self._orig["TradeTracker"]
         fetcher_mod.fetch_kline = self._orig["fetch_kline"]
+        runner.broker_state_mod.fetch_broker_state = self._orig["fetch_broker_state"]
+        runner.event_risk.has_earnings_risk = self._orig["has_earnings_risk"]
+        runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         self._tmpdir.cleanup()
 
     def _seed_losing_position(self, portfolio):

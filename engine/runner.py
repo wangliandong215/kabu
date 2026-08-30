@@ -26,13 +26,17 @@ from engine import news as news_sentiment
 from engine import pipeline
 from engine import scoring
 from engine import entry_quality
+from engine import event_risk
+from engine import market_preflight
 from engine import regime
+from engine import research_snapshot
 from engine import market_weather
 from engine import market_context
 from engine.market_hours import filter_open, should_notify_close, should_notify_open, is_daytime_jst
 from portfolio import capacity_manager
+from portfolio import broker_state as broker_state_mod
 from portfolio.tracker import Portfolio
-from risk import guard, sizing
+from risk import guard, sizing, portfolio_risk_manager
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash)
@@ -302,12 +306,71 @@ def run_once(
                     except Exception as exc:
                         alert.log(f"trade_tracker: log_exit failed {code} — {exc}")
 
+    # ── v2.10 Portfolio Risk Manager — broker ground-truth exposure control ──
+    # 用真实broker持仓市值/现金分级（见risk/portfolio_risk_manager.py docstring
+    # 和config.py同名注释）——不用portfolio.exposure_pct()/available_cash()
+    # （成本价口径，浮盈测不出来，且已实测跟broker真实持仓对不上）。JP Paper
+    # pass跳过：那是独立的虚拟资金池，跟真实US broker账户无关。
+    risk_block = None
+    remaining_broker_cash = None
+    if not is_jp_pass:
+        broker_state = None
+        try:
+            broker_state = broker_state_mod.fetch_broker_state(trd_env)
+        except Exception as exc:
+            alert.error(f"portfolio_risk_manager: broker状态查询失败（{exc}），"
+                        f"本轮暂停新增买入（保守降级，不做强制平仓/对账）")
+            risk_block = "PORTFOLIO_RISK_DATA_UNAVAILABLE"
+
+        if broker_state is not None:
+            remaining_broker_cash = broker_state.cash
+
+            diffs = portfolio_risk_manager.reconcile(broker_state, portfolio.data["positions"])
+            diff_grew = portfolio_risk_manager.check_and_update_diff_growth(diffs)
+            for d in diffs:
+                portfolio_risk_manager.log_diff(d)
+                grew = diff_grew.get(d.code, False)
+                if d.code not in config.RECONCILIATION_IGNORE_CODES or grew:
+                    growth_note = "（差异较上次扩大）" if grew else ""
+                    alert.error(f"持仓对账不一致{growth_note}: {d.code} broker={d.broker_qty:.0f}股 "
+                                f"tracker={d.tracker_qty:.0f}股 差={d.diff_qty:+.0f}股")
+
+            assessment = portfolio_risk_manager.evaluate(broker_state)
+            alert.log(f"portfolio_risk_manager: 仓位{assessment.exposure_pct:.1%}"
+                      f"  tier={assessment.tier}  现金${assessment.cash:,.0f}"
+                      f"  总资产${assessment.total_assets:,.0f}")
+
+            executed_orders = []
+            if assessment.tier in (portfolio_risk_manager.TIER_PAUSE, portfolio_risk_manager.TIER_WARNING):
+                risk_block = f"PORTFOLIO_RISK_{assessment.tier}: exposure {assessment.exposure_pct:.1%}"
+                alert.warn(risk_block + " — 暂停新增买入，不强制卖出")
+            elif assessment.tier == portfolio_risk_manager.TIER_EMERGENCY:
+                risk_block = f"PORTFOLIO_RISK_EMERGENCY: exposure {assessment.exposure_pct:.1%}"
+                alert.error(risk_block + f" — 触发强制再平衡，目标回落至"
+                            f"{config.PORTFOLIO_RISK_REBALANCE_TARGET:.0%}")
+                # v2.10.1: 自动循环里的再平衡，哪怕这一轮confirmed=True，
+                # 也强制走DRY RUN，直到人工把
+                # config.PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE打开，或者手动
+                # 跑一次 execute_emergency_rebalance.py（那个脚本直接传
+                # confirmed=True，绕开这个开关——跑那个脚本本身就是人工确认
+                # 这个动作）。
+                rebalance_confirmed = confirmed and config.PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE
+                executed_orders = _run_emergency_rebalance(
+                    portfolio=portfolio, results=results, trd_env=trd_env, env_label=env_label,
+                    confirmed=rebalance_confirmed, ktype=ktype, bars=bars, tracker=tracker,
+                )
+                remaining_broker_cash += sum(o["price"] * o["sell_qty"] for o in executed_orders)
+
+            portfolio_risk_manager.log_snapshot(assessment, diffs, executed_orders)
+
     # ── Macro news circuit breaker (checked once per pass) ───────────────────
     macro_block = news_sentiment.macro_circuit_breaker()
     if macro_block:
         alert.warn(f"新闻面熔断触发（{macro_block}），本轮不再开新仓")
     if not macro_block and drawdown_halt:
         macro_block = "MAX_DRAWDOWN_HALT: realized drawdown exceeded threshold"
+    if not macro_block and risk_block:
+        macro_block = risk_block
 
     # ── QQQ macro technical halt + Market Weather regime (checked once per
     #    pass) ───────────────────────────────────────────────────────────────
@@ -436,6 +499,9 @@ def run_once(
             # Only add when signal is still BUY and meaningfully stronger
             if new_sig != "BUY":
                 continue
+            if event_risk.has_earnings_risk(code):
+                alert.log(f"runner: {code} 处于财报窗口期，跳过加仓")
+                continue
             if new_str - old_str < config.PYRAMID_STRENGTH_UPGRADE_MIN:
                 continue
             # Right-side pyramid: price must not be too far above avg cost
@@ -531,10 +597,11 @@ def run_once(
                 break
             # 置换成立，名额已腾出——直接往下走已有的敞口/板块/
             # sizing/BUY逻辑，就像这个名额本来就空着一样。
-        if not guard.check_total_exposure(portfolio):
-            alert.log(f"runner: total exposure {portfolio.exposure_pct():.0%} "
-                      f">= {config.MAX_TOTAL_EXPOSURE_PCT:.0%} — skip new entries")
-            break
+        # 总仓位敞口的判断已经上移到v2.10 Portfolio Risk Manager（见本函数前面
+        # "Portfolio Risk Manager"那一段）——它在macro_block里，通过
+        # pipeline.build_candidate_pool()的macro_block短路（macro_block为真时
+        # 直接返回空候选池）挡住这里的整个循环，不需要在这里重复判断一次
+        # portfolio.exposure_pct()（成本价口径，已废弃用于风控判断）。
         if not guard.check_sector_exposure(portfolio, code):
             sector = config.SECTOR_MAP.get(code, "other")
             alert.warn_skip(code, f"{code} 所属板块({sector})仓位占比"
@@ -578,8 +645,18 @@ def run_once(
             market_weather_code=weather_code,
             score_label=cand.score_label,
         )
+        # v2.10 现金红线：不能因为新买入信号把broker真实现金买成负数（哪怕总
+        # 仓位还在95%以内）——用remaining_broker_cash（本轮从broker真实现金
+        # 起算、每次成交后扣减，见前面Portfolio Risk Manager那段）做硬约束，
+        # 不用portfolio.available_cash()（成本价口径，floor在0，测不出真实
+        # 欠款）。broker状态本轮取数失败时remaining_broker_cash为None，不做
+        # 这层约束——那种情况risk_block已经把macro_block整体挡死了。
+        if remaining_broker_cash is not None:
+            max_affordable = int(remaining_broker_cash // price)
+            if max_affordable < qty:
+                qty = max_affordable
         if qty <= 0:
-            alert.warn_skip(code, f"{code} 现价{price:.4f}下可买股数为0，跳过")
+            alert.warn_skip(code, f"{code} 现价{price:.4f}下可买股数为0（含真实现金约束），跳过")
             continue
 
         alert.info(f"准备买入 {code}，{qty}股 @{price:.4f}，"
@@ -597,6 +674,8 @@ def run_once(
         if confirmed and fill["dealt_qty"] > 0:
             filled_qty = int(fill["dealt_qty"])
             fill_price = fill["dealt_avg_price"] or price
+            if remaining_broker_cash is not None:
+                remaining_broker_cash -= fill_price * filled_qty
             # Persist entry_atr so ATR trailing stop can be reconstructed after restart.
             # score_label/total_score persisted too so this position can itself be
             # considered as a future Active Replacement victim (see
@@ -666,6 +745,22 @@ def run_once(
                         )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_entry_quality failed {code} — {exc}")
+                try:
+                    # v2.11.1 Trade Research Snapshot — permanent, write-once
+                    # record of what the system saw at trade time (see
+                    # engine/research_snapshot.py's module docstring). Purely
+                    # additive/observational, same never-block-the-trade
+                    # contract as the three hooks above — the BUY has already
+                    # filled by the time this runs.
+                    snapshot = research_snapshot.build_trade_research_snapshot(
+                        code, result, cand, signal_time=pos_after.get("entry_time"),
+                    )
+                    tracker.log_research_snapshot(
+                        trade_id=_trade_id(code, pos_after.get("entry_time")),
+                        snapshot=snapshot,
+                    )
+                except Exception as exc:
+                    alert.log(f"trade_tracker: log_research_snapshot failed {code} — {exc}")
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，站上MA200时买入/补仓到目标比例 ──────
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。
@@ -685,6 +780,11 @@ def run_once(
             shortfall    = target_value - qqq_held_value
             qqq_price    = get_price(config.QQQ_CORE_CODE) if shortfall > 0 else 0.0
             spend        = min(portfolio.available_cash() * 0.98, shortfall) if shortfall > 0 else 0.0
+            # v2.10 现金红线：跟2c的活跃仓位买入同一约束，不能把broker真实现金
+            # 买成负数——remaining_broker_cash为None（本轮broker取数失败）时不
+            # 加这层，risk_block已经把macro_block整体挡死。
+            if remaining_broker_cash is not None:
+                spend = min(spend, remaining_broker_cash)
             if qqq_price > 0 and spend > qqq_price:
                 qty = int(spend / qqq_price)
                 if qty > 0:
@@ -701,6 +801,8 @@ def run_once(
                     if confirmed and fill["dealt_qty"] > 0:
                         filled_qty = int(fill["dealt_qty"])
                         fill_price = fill["dealt_avg_price"] or qqq_price
+                        if remaining_broker_cash is not None:
+                            remaining_broker_cash -= fill_price * filled_qty
                         if qqq_position is not None:
                             # 补仓走pyramid同款的add_to_position——跟2b的scale-in
                             # 一样只更新qty/avg_cost，不新开Trade Intelligence DB
@@ -935,6 +1037,160 @@ def _days_held(entry_time_iso) -> int:
     return 0
 
 
+def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_label: str,
+                             confirmed: bool, ktype: str, bars: int,
+                             tracker: Optional[TradeTracker] = None) -> List[dict]:
+    """v2.10.1 EMERGENCY-tier rebalance executor.
+
+    confirmed=False (the automatic loop's default until config.
+    PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE is turned on, or a caller like
+    execute_emergency_rebalance.py passes True directly) — preview mode:
+    computes ONE static plan against the current broker snapshot and walks
+    every leg through _place_order(confirmed=False), which only logs
+    "[DRY RUN] would SELL ..." and never touches state. No lock needed
+    (nothing real happens), no re-fetching between legs (there's nothing to
+    re-verify since nothing changed).
+
+    confirmed=True — real execution: iterative loop, one leg at a time —
+    fetch fresh broker state, confirm still EMERGENCY, (re)compute the plan
+    from that fresh snapshot, execute only its first leg, then loop back to
+    fetch again. This is deliberately NOT "compute the whole plan once and
+    execute every leg" (that was v2.10's original design) — a frozen batch
+    plan can't account for a partial fill on an earlier leg or price drift
+    between orders (see the 2026-08-29 rebalance preview report). Every
+    iteration re-verifies against real broker qty before sizing the sell
+    (belt-and-suspenders on top of plan_rebalance() already using a fresh
+    snapshot), books the REAL dealt_qty into tracker.py (never the planned
+    qty), and stops immediately (fail-stop, no retry-forever) on a broker
+    query failure, a zero fill, or hitting config.
+    PORTFOLIO_REBALANCE_MAX_ORDERS_PER_RUN. Wrapped in a file lock
+    (risk/portfolio_risk_manager.try_acquire_rebalance_lock()) so this can
+    never overlap with another real execution (the automatic loop and a
+    manually-run execute_emergency_rebalance.py, or two manual runs).
+    Finishes with one fresh post-trade broker re-fetch, logged as an
+    explicit before/after summary.
+
+    Returns the list of {"code","sell_qty","price","reason"} dicts actually
+    executed (or, in preview mode, that WOULD be executed) — for
+    portfolio_risk_manager.log_snapshot()'s audit trail.
+    """
+    target_pct = config.PORTFOLIO_RISK_REBALANCE_TARGET
+
+    if not confirmed:
+        try:
+            bs = broker_state_mod.fetch_broker_state(trd_env)
+        except Exception as exc:
+            alert.error(f"再平衡预览：broker状态查询失败，跳过本轮预览 — {exc}")
+            return []
+        plan = portfolio_risk_manager.plan_rebalance(
+            bs, portfolio.data["positions"], target_pct=target_pct, results=results)
+        previewed = []
+        for order in plan:
+            alert.info(f"[预览] 再平衡将卖出 {order.code} {order.sell_qty}股 "
+                      f"@{order.price:.4f}（{order.reason}，优先级{order.priority}）")
+            _place_order(code=order.code, side="SELL", qty=order.sell_qty, price=order.price,
+                        trd_env=trd_env, env_label=env_label, confirmed=False)
+            previewed.append({"code": order.code, "sell_qty": order.sell_qty,
+                              "price": order.price, "reason": order.reason})
+        return previewed
+
+    lock_state = portfolio_risk_manager.try_acquire_rebalance_lock()
+    if lock_state == portfolio_risk_manager.LOCK_STALE:
+        alert.error("再平衡：发现一个超时未释放的执行锁（可能是上次执行崩溃/卡死），"
+                    r"为避免掩盖异常状态不会自动清除——需要人工确认账户真实状态后"
+                    r"手动删除 C:\KabuData\portfolio\rebalance_lock.json 才会继续")
+        return []
+    if lock_state == portfolio_risk_manager.LOCK_ACTIVE:
+        alert.warn("再平衡：已有一次执行正在进行中（或锁文件无法读取），本轮跳过，避免重复下单")
+        return []
+
+    executed_orders: List[dict] = []
+    before_assessment = None
+    try:
+        for i in range(config.PORTFOLIO_REBALANCE_MAX_ORDERS_PER_RUN):
+            try:
+                bs = broker_state_mod.fetch_broker_state(trd_env)
+            except Exception as exc:
+                alert.error(f"再平衡：broker状态查询失败，停止本轮再平衡 — {exc}")
+                break
+            assessment = portfolio_risk_manager.evaluate(bs)
+            if before_assessment is None:
+                before_assessment = assessment
+            if assessment.tier != portfolio_risk_manager.TIER_EMERGENCY:
+                alert.log(f"再平衡：仓位已回落到{assessment.exposure_pct:.1%}"
+                          f"（{assessment.tier}），停止（本轮已执行{len(executed_orders)}笔）")
+                break
+            plan = portfolio_risk_manager.plan_rebalance(
+                bs, portfolio.data["positions"], target_pct=target_pct, results=results)
+            if not plan:
+                alert.log("再平衡：仍处于EMERGENCY但已无可执行的减仓计划（可能都低于最小交易额），停止")
+                break
+
+            order = plan[0]
+            bpos = bs.positions.get(order.code)
+            broker_qty = int(bpos.qty) if bpos is not None else 0
+            sell_qty = min(order.sell_qty, broker_qty)   # never oversell vs. just-refetched real qty
+            if sell_qty <= 0:
+                alert.error(f"再平衡：{order.code}计划卖出但broker真实股数为{broker_qty}，"
+                            f"停止本轮再平衡")
+                break
+
+            alert.info(f"再平衡卖出 {order.code} {sell_qty}股 @{order.price:.4f}"
+                      f"（{order.reason}，优先级{order.priority}，第{i + 1}笔）")
+            fill = _place_order(code=order.code, side="SELL", qty=sell_qty, price=order.price,
+                                trd_env=trd_env, env_label=env_label, confirmed=True)
+            if fill["dealt_qty"] <= 0:
+                alert.error(f"再平衡：{order.code}未成交（{fill['status']}），停止本轮再平衡，"
+                            f"等待下次评估重新计算")
+                break
+
+            dealt_qty  = int(fill["dealt_qty"])
+            exit_price = fill["dealt_avg_price"] or order.price
+            closed = portfolio.reduce_position(order.code, exit_price, dealt_qty, reason=order.reason)
+            alert.trade_sell(
+                order.code, closed.get("avg_cost", exit_price), exit_price, dealt_qty,
+                days_held=_days_held(closed.get("entry_time")), reason=order.reason,
+                cash_available=portfolio.available_cash(), total_equity=portfolio.current_equity(),
+                position_count=portfolio.position_count(), trade_id=portfolio.next_trade_id(), env=env_label,
+            )
+            if tracker is not None:
+                try:
+                    tracker.log_exit(
+                        trade_id=_trade_id(order.code, closed.get("entry_time")),
+                        price=exit_price, cash=portfolio.available_cash(),
+                        equity=portfolio.current_equity(), timestamp=datetime.now().isoformat(),
+                        exit_reason=order.reason, regime_ctx=_trade_regime_ctx(order.code, ktype, bars),
+                    )
+                except Exception as exc:
+                    alert.log(f"trade_tracker: log_exit failed {order.code} — {exc}")
+            executed_orders.append({"code": order.code, "sell_qty": dealt_qty,
+                                    "price": exit_price, "reason": order.reason})
+            if dealt_qty < sell_qty:
+                alert.warn(f"再平衡：{order.code}部分成交 {dealt_qty}/{sell_qty}股，"
+                          f"下一轮循环会用最新broker状态重新计算剩余缺口")
+        else:
+            alert.error(f"再平衡：达到单轮最大下单数上限"
+                        f"({config.PORTFOLIO_REBALANCE_MAX_ORDERS_PER_RUN})仍未回落到EMERGENCY以下，"
+                        f"停止并等待人工检查")
+
+        try:
+            bs_after = broker_state_mod.fetch_broker_state(trd_env)
+            after = portfolio_risk_manager.evaluate(bs_after)
+            before_desc = f"{before_assessment.exposure_pct:.1%}" if before_assessment else "?"
+            alert.log(f"再平衡结束：本轮共{len(executed_orders)}笔  "
+                      f"仓位 {before_desc} -> {after.exposure_pct:.1%}（{after.tier}）  "
+                      f"现金 -> ${after.cash:,.0f}")
+            if after.tier == portfolio_risk_manager.TIER_EMERGENCY:
+                alert.error("再平衡结束后仓位仍处于EMERGENCY，需要人工介入检查")
+        except Exception as exc:
+            alert.error(f"再平衡后验证查询失败 — {exc}")
+    finally:
+        if lock_state == portfolio_risk_manager.LOCK_ACQUIRED:
+            portfolio_risk_manager.release_rebalance_lock()
+
+    return executed_orders
+
+
 def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incoming_score: float,
                                 trd_env, env_label: str, confirmed: bool,
                                 results: dict, tracker: Optional[TradeTracker] = None,
@@ -1041,6 +1297,13 @@ def _place_order(
     (order_id only means the broker accepted the order, not that it filled;
     see engine/broker.py module docstring for the incident this fixed).
     """
+    if confirmed and config.PREFLIGHT_ENABLED:
+        result = market_preflight.check(code)
+        if not result.ok:
+            alert.error(f"{code} preflight检查未通过（{result.reason}），取消下单")
+            return {"order_id": "", "dealt_qty": 0.0, "dealt_avg_price": 0.0,
+                    "status": "PREFLIGHT_FAILED"}
+
     broker = get_broker(code)
     return broker.place_order(
         code=code, side=side, qty=qty, price=price,

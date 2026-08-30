@@ -22,7 +22,16 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
+
+# v2.10 Portfolio Risk Manager queries the real broker every run_once() pass
+# — stub it to a comfortably-under-95%-exposure state so these pre-existing
+# macro_block/pyramid tests stay hermetic and unaffected by the new feature
+# (see engine/test_portfolio_risk_manager_gate.py for tests of the feature
+# itself).
+_NO_RISK_BROKER_STATE = BrokerState(positions={}, cash=1_000_000.0,
+                                     total_assets=1_000_000.0, long_mv=0.0)
 
 
 class _FakeTracker:
@@ -54,8 +63,14 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
             "TradeTracker": runner.TradeTracker,
             "fetch_kline": fetcher_mod.fetch_kline,
             "PYRAMID_ENABLED": config.PYRAMID_ENABLED,
+            "fetch_broker_state": runner.broker_state_mod.fetch_broker_state,
+            "has_earnings_risk": runner.event_risk.has_earnings_risk,
+            "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
         }
 
+        runner.broker_state_mod.fetch_broker_state = lambda trd_env: _NO_RISK_BROKER_STATE
+        runner.event_risk.has_earnings_risk = lambda code, trade_date=None: False
+        runner.research_snapshot.build_trade_research_snapshot = lambda *a, **kw: {}
         runner.Portfolio = lambda: Portfolio(path=self.portfolio_path)
         runner.filter_open = lambda codes: list(codes)
         runner.regime.qqq_macro_halt = lambda df: False
@@ -93,6 +108,9 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
         runner.TradeTracker = self._orig["TradeTracker"]
         fetcher_mod.fetch_kline = self._orig["fetch_kline"]
         config.PYRAMID_ENABLED = self._orig["PYRAMID_ENABLED"]
+        runner.broker_state_mod.fetch_broker_state = self._orig["fetch_broker_state"]
+        runner.event_risk.has_earnings_risk = self._orig["has_earnings_risk"]
+        runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         self._tmpdir.cleanup()
 
     def _seed_pyramid_candidate(self, portfolio):
@@ -175,6 +193,20 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
         sells = [o for o in self.placed_orders if o["side"] == "SELL"]
         self.assertEqual(len(sells), 1,
                           "EXIT must still fire even while macro_block blocks pyramid")
+
+    def test_pyramid_blocked_during_earnings_risk_window(self):
+        """v2.11 Event Risk Layer: a pyramid add must not fire when
+        engine.event_risk.has_earnings_risk() reports the code is within its
+        earnings blackout window, even with no other breaker active."""
+        runner.event_risk.has_earnings_risk = lambda code, trade_date=None: True
+        portfolio = Portfolio(path=self.portfolio_path)
+        self._seed_pyramid_candidate(portfolio)
+
+        runner.run_once(codes=["US.TEST"], confirmed=True,
+                         auto_route=False, strategy_name="atr_breakout")
+
+        self.assertEqual(len(self.placed_orders), 0,
+                          "pyramid add must not fire during an earnings risk window")
 
     def test_normal_buy_and_replacement_gate_unchanged(self):
         """Regression guard: a fresh BUY signal (no existing position) is

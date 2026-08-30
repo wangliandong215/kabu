@@ -107,7 +107,7 @@ WATCHLIST_EUROPE_US: list = [
     "US.MELI",  # MercadoLibre
     "US.ABNB",  # Airbnb
     "US.TTWO",  # Take-Two Interactive
-    "US.EA",    # Electronic Arts
+    # "US.EA" 已移除 — API 返回"未知股票"，因私有化交易退市（2026-08-25）。
     "US.TTD",   # The Trade Desk
     "US.PDD",   # PDD Holdings
 
@@ -339,6 +339,60 @@ MAX_DRAWDOWN_PCT:       float = 0.20  # 20% portfolio drawdown → halt trading
 # P1 — global exposure limits
 MAX_TOTAL_EXPOSURE_PCT:  float = 0.95  # QQQ底仓+10只活跃仓位，放宽至95%
 MAX_SECTOR_EXPOSURE_PCT: float = 0.50  # 半导体17只，50%允许同时持2-3只龙头
+
+# ── Portfolio Risk Manager (v2.10, broker ground-truth exposure control) ──────
+# 背景：tracker.exposure_pct()/available_cash() 按成本价算，浮盈完全不会让
+# 它们漂移，而且2026-08-29实测 tracker.json 记录的QQQ股数(349)已经跟broker
+# 真实股数(473)对不上——两个内部指标都不能再作为"是否暂停买入/强制减仓"的
+# 判断依据。新的 risk/portfolio_risk_manager.py 改为直接查询broker真实持仓
+# 市值+现金（portfolio/broker_state.py），用 exposure_pct=long_mv/total_assets
+# （市值口径，负现金也能正确处理）分级：
+#   <=MAX_TOTAL_EXPOSURE_PCT(95%)          正常
+#   95%~PORTFOLIO_RISK_TIER3_PCT(100%)     暂停新增买入，不强制卖出
+#   100%~PORTFOLIO_RISK_EMERGENCY_PCT(105%) 风险告警，暂停新增买入
+#   >105%                                   强制再平衡，目标回落到
+#                                            PORTFOLIO_RISK_REBALANCE_TARGET
+PORTFOLIO_RISK_TIER3_PCT:          float = 1.00   # >100%：警戒级暂停
+PORTFOLIO_RISK_EMERGENCY_PCT:      float = 1.05   # >105%：触发强制再平衡
+PORTFOLIO_RISK_REBALANCE_TARGET:   float = 0.95   # 再平衡卖到约这个比例
+PORTFOLIO_REBALANCE_MIN_TRADE_USD: float = 1000.0 # 低于这个金额的再平衡零头不卖，避免碎片化小单
+RECONCILIATION_IGNORE_CODES: list = ["US.0000"]   # 已退市EA的broker幽灵持仓
+    # （qty=247/市值$0，见project memory「EA delisting adjustment」）——
+    # 每轮仍写入reconciliation_diffs.jsonl存档，只是不再触发alert.error刷屏。
+
+# ── v2.10.1 上线前安全加固（2026-08-29）────────────────────────────────────────
+# 背景：v2.10刚建好还没下过一笔真实单。EMERGENCY再平衡默认强制走DRY RUN——
+# 哪怕整轮run_once()是confirmed=True，再平衡这几笔单也不会真的下，直到人工
+# 显式把这个开关打开，或者手动跑一次 execute_emergency_rebalance.py（运行
+# 这个脚本本身就是"人工确认"这个动作）。跑过几次真实再平衡、确认成交确认/
+# 状态同步都正常之后，再讨论要不要把这个开关打开进入全自动。
+PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE: bool = False
+PORTFOLIO_REBALANCE_MAX_ORDERS_PER_RUN: int = 20   # 单轮再平衡最多下几笔单——
+    # 纯粹是防止逻辑异常导致死循环的兜底，正常情况下2-3笔就该收敛到目标仓位。
+PORTFOLIO_REBALANCE_LOCK_TIMEOUT_SEC: int = 600    # 再平衡执行锁超时——超过
+    # 这个时长还存在的锁视为异常（上次执行崩溃/卡死），只报错不自动清除，
+    # 需要人工确认后手动删除锁文件才能继续，避免掩盖真正的执行期故障。
+
+# ── Event Risk Layer — Earnings (v2.11) ────────────────────────────────────────
+# 背景：OpenD 10.10 的 get_earnings_calendar() 已经在用（risk/earnings.py→
+# engine/pipeline.py 的新开仓黑名单过滤），但天数/host-port 都是硬编码，且
+# 金字塔加仓路径完全没挡财报窗口。v2.11 把数据获取(data/earnings.py)和风险
+# 判断(engine/event_risk.py)拆开，天数配置化，并把加仓路径也接进来。
+# 只挡"新增风险"（新开仓+加仓），已有仓位不强制卖出，财报过后随缓存过期
+# 自动恢复正常交易。
+EVENT_RISK_ENABLED: bool = True
+EVENT_RISK_EARNINGS_BLOCK_DAYS: int = 1     # 距财报 N 个交易日内：禁止新开仓+禁止加仓
+EVENT_RISK_LOOKAHEAD_DAYS: int = 3          # 财报日历向前预取天数
+EVENT_RISK_CACHE_TTL_SECONDS: int = 6 * 3600
+
+# ── OpenD Preflight (v2.11) ─────────────────────────────────────────────────────
+# 下单前最后一道安全阀：确认 OpenD 连接、行情/交易登录状态、目标市场实际处于
+# 可交易状态，全部通过才放行 _place_order()。用黑名单而非白名单挡
+# market_state——moomoo MarketState 枚举值很多（MORNING/AFTERNOON/AUCTION/
+# PRE_MARKET_BEGIN…），精确白名单容易漏判、误伤正常交易时段；黑名单只挡明确
+# 的"未开市"状态更安全。
+PREFLIGHT_ENABLED: bool = True
+PREFLIGHT_BLOCKED_MARKET_STATES: set = {"CLOSED", "NONE", "REST"}
 
 # ── v2.3 Portfolio Capacity Manager（仓位名额主动置换）─────────────────────────
 # 背景：MAX_POSITIONS 限的是"仓位数量"不是"资金占用比例"，一个3%的
@@ -757,7 +811,7 @@ SECTOR_MAP: dict = {
     "US.GOOGL":"internet", "US.GOOG": "internet", "US.NFLX": "internet",
     "US.TSLA": "internet", "US.BKNG": "internet", "US.MELI": "internet",
     "US.ABNB": "internet",
-    "US.TTWO": "internet", "US.EA":   "internet", "US.TTD":  "internet",
+    "US.TTWO": "internet", "US.TTD":  "internet",
     "US.PDD":  "internet",
     # AI & Emerging
     "US.PLTR": "ai", "US.APP": "ai", "US.ARM": "ai",
@@ -827,7 +881,7 @@ NAME_MAP: dict = {
     "US.AMZN": "亚马逊", "US.META": "Meta", "US.GOOGL": "谷歌A",
     "US.GOOG": "谷歌C", "US.NFLX": "奈飞", "US.TSLA": "特斯拉",
     "US.BKNG": "缤客", "US.MELI": "美客多", "US.ABNB": "爱彼迎",
-    "US.TTWO": "Take-Two互动娱乐", "US.EA": "艺电", "US.TTD": "The Trade Desk",
+    "US.TTWO": "Take-Two互动娱乐", "US.TTD": "The Trade Desk",
     "US.PDD": "拼多多",
     # AI & Emerging Tech
     "US.PLTR": "帕兰提尔", "US.APP": "AppLovin", "US.ARM": "ARM控股",
@@ -1020,3 +1074,21 @@ MR_FUNDAMENTALS_CACHE_TTL_DAYS: int = 7
 # three stay manual-annotation-only, see research/annotate_event.py).
 MR_CRASH_MARKET_SELLOFF_3D: float = -0.03   # SPY 3D return <= this -> market-wide selloff
 MR_CRASH_SECTOR_SELLOFF_3D: float = -0.05   # sector ETF 3D return <= this -> sector selloff
+
+# ── Research: Market Features (News/Macro/FedWatch/Options, v2.11) ────────────
+# 观察层，不参与交易决策——见 research/collect_market_features.py 模块docstring
+# 的隔离纪律（不 import portfolio/risk/strategies/engine.runner）。
+RESEARCH_MARKET_FEATURES_ENABLED: bool = True
+RESEARCH_MARKET_FEATURES_DB_PATH: str = r"C:\KabuData\research\market_features.db"
+RESEARCH_MACRO_REGION: str = "US"
+RESEARCH_MACRO_INDICATOR_IDS: list = []   # 按需填入关心的宏观指标 ID（见
+    # get_macro_indicator_list 的返回结果，为空则跳过历史值抓取，只记录指标列表）
+RESEARCH_OPTIONS_MARKET: str = "US_SECURITY"
+
+# ── Research: Indicator Shadow Validation（长期验证，v2.11）────────────────────
+# 桶位一致性校验，非数值diff——OpenD SDK 没有暴露"某股票某天RSI/MACD具体数值"
+# 的接口（只有 get_technical_unusual 异动筛选和 get_stock_filter 条件筛选），
+# 所以只能验证"本系统判定的超买超卖分类"是否跟 moomoo 自己的条件筛选结果一致。
+# 不接入自动调度，手动跑 research/indicator_validator.py。
+INDICATOR_SHADOW_RSI_OVERSOLD: float = 30.0
+INDICATOR_SHADOW_RSI_OVERBOUGHT: float = 70.0

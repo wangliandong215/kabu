@@ -22,7 +22,14 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
+
+# v2.10 Portfolio Risk Manager queries the real broker every run_once() pass
+# — stub it to a comfortably-under-95%-exposure state so this pre-existing
+# entry-quality-hook test stays hermetic and unaffected by the new feature.
+_NO_RISK_BROKER_STATE = BrokerState(positions={}, cash=1_000_000.0,
+                                     total_assets=1_000_000.0, long_mv=0.0)
 
 
 class _FakeTrackerNoEntryQuality:
@@ -72,8 +79,14 @@ class EntryQualityHookTestCase(unittest.TestCase):
             "fundamental_score": runner.pipeline.fundamental.score,
             "classify_code": runner.pipeline.news_filter.classify_code,
             "is_earnings_blackout": runner.pipeline.is_earnings_blackout,
+            "fetch_broker_state": runner.broker_state_mod.fetch_broker_state,
+            "has_earnings_risk": runner.event_risk.has_earnings_risk,
+            "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
         }
 
+        runner.broker_state_mod.fetch_broker_state = lambda trd_env: _NO_RISK_BROKER_STATE
+        runner.event_risk.has_earnings_risk = lambda code, trade_date=None: False
+        runner.research_snapshot.build_trade_research_snapshot = lambda *a, **kw: {}
         runner.Portfolio = lambda: Portfolio(path=self.portfolio_path)
         runner.filter_open = lambda codes: list(codes)
         runner.regime.qqq_macro_halt = lambda df: False
@@ -124,6 +137,9 @@ class EntryQualityHookTestCase(unittest.TestCase):
         runner.pipeline.fundamental.score = self._orig["fundamental_score"]
         runner.pipeline.news_filter.classify_code = self._orig["classify_code"]
         runner.pipeline.is_earnings_blackout = self._orig["is_earnings_blackout"]
+        runner.broker_state_mod.fetch_broker_state = self._orig["fetch_broker_state"]
+        runner.event_risk.has_earnings_risk = self._orig["has_earnings_risk"]
+        runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         self._tmpdir.cleanup()
 
 
