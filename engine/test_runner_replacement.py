@@ -19,6 +19,7 @@ from pathlib import Path
 
 import config
 import engine.runner as runner
+import test_support
 from engine.scoring import LABEL_FULL, LABEL_OBSERVATION
 from portfolio import capacity_manager
 from portfolio.tracker import Portfolio
@@ -27,6 +28,7 @@ from portfolio.tracker import Portfolio
 class TestAttemptActiveReplacement(unittest.TestCase):
 
     def setUp(self):
+        self._alert_handlers = test_support.mute_alert_file_logging()
         self._orig_enable = config.ENABLE_ACTIVE_REPLACEMENT
         self._orig_advantage = config.REPLACEMENT_MARGIN
         self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
@@ -62,6 +64,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         runner.get_price = self._orig_get_price
         runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
+        test_support.unmute_alert_file_logging(self._alert_handlers)
 
     def _mock_place_order(self, dealt_qty_override=None):
         def _mock(code, side, qty, price, trd_env, env_label, confirmed):
@@ -199,6 +202,7 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
     唯一允许不同的是调用方式本身。"""
 
     def setUp(self):
+        self._alert_handlers = test_support.mute_alert_file_logging()
         self._orig_margin = config.REPLACEMENT_MARGIN
         self._orig_min_score = config.REPLACEMENT_MIN_NEW_SCORE
         self._orig_max_pool = config.REPLACEMENT_MAX_OBSERVATION_POOL_SIZE
@@ -239,6 +243,7 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         runner.get_price = self._orig_get_price
         runner.alert.trade_sell = self._orig_trade_sell
         self._tmpdir.cleanup()
+        test_support.unmute_alert_file_logging(self._alert_handlers)
 
     def _seed(self, code, score_label, total_score, held_days_ago=5):
         entry_time = (datetime.now() - timedelta(days=held_days_ago)).isoformat()

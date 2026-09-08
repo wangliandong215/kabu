@@ -23,6 +23,17 @@ run_once() pass) — reused as-is rather than adding a second one. A closed
 market is treated as a normal, expected exit here (prints a message, exits
 0), never as an error.
 
+2026-08-31: after the first successful real EXECUTE, an audit review found
+this script never called portfolio_risk_manager.reconcile()/log_diff()/
+log_snapshot() — the trade itself was correct (tracker, broker, and the
+trade_sell notification were all fine), but the run left no entry in
+risk_state_log.jsonl/reconciliation_diffs.jsonl, unlike every automatic
+run_once() pass. Fixed by adding the same reconcile+log_diff+log_snapshot
+calls run_once() already makes, in the same order, so a manually-executed
+rebalance leaves the identical audit trail an automatic one would. This is
+a logging-only change — evaluate()/plan_rebalance()/_run_emergency_rebalance()
+themselves are untouched.
+
 Usage:
     python execute_emergency_rebalance.py            # prints preview, asks to confirm
     python execute_emergency_rebalance.py --yes       # skips the interactive prompt
@@ -68,15 +79,32 @@ def main() -> int:
         print(f"ERROR: broker状态查询失败，无法预览/执行 — {exc}")
         return 1
 
+    # 跟run_once()自动路径同一套对账逻辑，同样的顺序：对账→分级→（如果
+    # EMERGENCY）预览/执行→最后统一写一条risk_state_log.jsonl快照，不管
+    # 这轮有没有真的执行再平衡（NORMAL/PAUSE/WARNING也要留痕，跟自动路径
+    # 每轮都记一致）。
+    portfolio = Portfolio()
+    diffs = prm.reconcile(bs, portfolio.data["positions"])
+    diff_grew = prm.check_and_update_diff_growth(diffs)
+    for d in diffs:
+        prm.log_diff(d)
+        grew = diff_grew.get(d.code, False)
+        if d.code not in config.RECONCILIATION_IGNORE_CODES or grew:
+            growth_note = "（差异较上次扩大）" if grew else ""
+            alert.error(f"持仓对账不一致{growth_note}: {d.code} broker={d.broker_qty:.0f}股 "
+                        f"tracker={d.tracker_qty:.0f}股 差={d.diff_qty:+.0f}股")
+
     assessment = prm.evaluate(bs)
     print(f"当前仓位 {assessment.exposure_pct:.2%}  tier={assessment.tier}  "
           f"现金 ${assessment.cash:,.2f}  总资产 ${assessment.total_assets:,.2f}")
 
+    executed: list = []
+
     if assessment.tier != prm.TIER_EMERGENCY:
-        print(f"当前不是EMERGENCY（{assessment.tier}），没有需要执行的再平衡，退出。")
+        print(f"当前不是EMERGENCY（{assessment.tier}），没有需要执行的再平衡。")
+        prm.log_snapshot(assessment, diffs, executed)
         return 0
 
-    portfolio = Portfolio()
     codes = list(portfolio.data["positions"].keys())
     print(f"扫描 {len(codes)} 个持仓标的以获取当前信号数据（用于「卖谁」排序）...")
     results = scan(codes, strategy_name="combined")
@@ -85,7 +113,8 @@ def main() -> int:
                               target_pct=config.PORTFOLIO_RISK_REBALANCE_TARGET,
                               results=results)
     if not plan:
-        print("EMERGENCY但当前没有可执行的减仓计划（可能都低于最小交易额），退出。")
+        print("EMERGENCY但当前没有可执行的减仓计划（可能都低于最小交易额）。")
+        prm.log_snapshot(assessment, diffs, executed)
         return 0
 
     print()
@@ -110,6 +139,7 @@ def main() -> int:
         answer = input('输入 "EXECUTE" 以确认执行上述真实卖单（其他任意输入=取消）: ')
         if answer.strip() != "EXECUTE":
             print("已取消，未下任何真实订单。")
+            prm.log_snapshot(assessment, diffs, executed)
             return 0
 
     try:
@@ -128,6 +158,8 @@ def main() -> int:
     print(f"执行完成，共 {len(executed)} 笔:")
     for o in executed:
         print(f"  {o['code']:10s} SOLD {o['sell_qty']:>6d}股 @{o['price']:>10.4f}  [{o['reason']}]")
+
+    prm.log_snapshot(assessment, diffs, executed)
     return 0
 
 

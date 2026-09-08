@@ -22,6 +22,7 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+import test_support
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
 
@@ -44,6 +45,7 @@ class _FakeTracker:
 class TestPyramidGatedByMacroBlock(unittest.TestCase):
 
     def setUp(self):
+        self._alert_handlers = test_support.mute_alert_file_logging()
         self._tmpdir = tempfile.TemporaryDirectory()
         self.portfolio_path = Path(self._tmpdir.name) / "positions.json"
         self.placed_orders = []
@@ -112,6 +114,7 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
         runner.event_risk.has_earnings_risk = self._orig["has_earnings_risk"]
         runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         self._tmpdir.cleanup()
+        test_support.unmute_alert_file_logging(self._alert_handlers)
 
     def _seed_pyramid_candidate(self, portfolio):
         """A held position whose new signal is meaningfully stronger than

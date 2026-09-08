@@ -20,6 +20,7 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+import test_support
 from portfolio.broker_state import BrokerPosition, BrokerState
 from portfolio.tracker import Portfolio
 from risk import portfolio_risk_manager as prm
@@ -58,6 +59,7 @@ def _mutate_broker_state(broker_state, code, side, dealt_qty, price):
 class PortfolioRiskManagerGateTestCase(unittest.TestCase):
 
     def setUp(self):
+        self._alert_handlers = test_support.mute_alert_file_logging()
         self._tmpdir = tempfile.TemporaryDirectory()
         self.portfolio_path = Path(self._tmpdir.name) / "positions.json"
         self.placed_orders = []
@@ -147,6 +149,7 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
         config.PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE = self._orig["AUTO_EXECUTE"]
         prm._LOCK_PATH.unlink(missing_ok=True)
         self._tmpdir.cleanup()
+        test_support.unmute_alert_file_logging(self._alert_handlers)
 
     def _seed_fresh_buy_candidate(self):
         runner.scan = lambda codes, **kw: {

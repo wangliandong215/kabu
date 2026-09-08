@@ -19,6 +19,7 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+import test_support
 from engine.market_preflight import PreflightResult
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
@@ -50,6 +51,7 @@ class _FakeBroker:
 class PreflightGateTestCase(unittest.TestCase):
 
     def setUp(self):
+        self._alert_handlers = test_support.mute_alert_file_logging()
         self._tmpdir = tempfile.TemporaryDirectory()
         self.portfolio_path = Path(self._tmpdir.name) / "positions.json"
         _FakeBroker.calls = []
@@ -128,6 +130,7 @@ class PreflightGateTestCase(unittest.TestCase):
         runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         config.PREFLIGHT_ENABLED = self._orig["PREFLIGHT_ENABLED"]
         self._tmpdir.cleanup()
+        test_support.unmute_alert_file_logging(self._alert_handlers)
 
     def test_buy_proceeds_when_preflight_passes(self):
         runner.market_preflight.check = lambda code: PreflightResult(True, "ok")
