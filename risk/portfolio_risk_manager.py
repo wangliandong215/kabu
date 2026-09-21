@@ -30,6 +30,13 @@ TIER_WARNING   = "WARNING"
 TIER_EMERGENCY = "EMERGENCY"
 TIER_UNKNOWN   = "UNKNOWN"
 
+# ── QQQ CORE concentration tiers (Layer 1 — see evaluate_qqq_concentration()
+#    below and config.py QQQ_CORE_SOFT_LIMIT_PCT/QQQ_CORE_HARD_LIMIT_PCT
+#    docstring). Independent of the TIER_* total-exposure tiers above. ───────
+QQQ_TIER_NORMAL      = "NORMAL"
+QQQ_TIER_OVERWEIGHT  = "CORE_OVERWEIGHT"
+QQQ_TIER_HARD_LIMIT  = "CORE_HARD_LIMIT"
+
 LOCK_ACQUIRED      = "ACQUIRED"
 LOCK_ACTIVE         = "LOCKED_ACTIVE"
 LOCK_STALE          = "LOCKED_STALE"
@@ -38,6 +45,8 @@ _RISK_LOG_PATH  = Path(r"C:\KabuData\portfolio\risk_state_log.jsonl")
 _DIFF_LOG_PATH  = Path(r"C:\KabuData\portfolio\reconciliation_diffs.jsonl")
 _LAST_DIFF_PATH = Path(r"C:\KabuData\portfolio\reconciliation_last_diff.json")
 _LOCK_PATH      = Path(r"C:\KabuData\portfolio\rebalance_lock.json")
+_QQQ_RISK_LOG_PATH = Path(r"C:\KabuData\portfolio\qqq_core_risk_log.jsonl")
+_QQQ_TRIM_PREVIEW_PATH = Path(r"C:\KabuData\portfolio\qqq_trim_last_preview.json")
 
 
 @dataclass
@@ -91,6 +100,81 @@ def evaluate(broker_state: Optional[BrokerState]) -> RiskAssessment:
     return RiskAssessment(tier=tier, exposure_pct=exposure_pct,
                            cash=broker_state.cash, total_assets=broker_state.total_assets,
                            long_mv=broker_state.long_mv)
+
+
+@dataclass
+class QQQConcentrationAssessment:
+    tier: str
+    qqq_pct: Optional[float]
+    qqq_value: Optional[float]
+    total_assets: Optional[float]
+    qqq_qty: Optional[float] = None
+    reason: str = ""
+
+
+def evaluate_qqq_concentration(broker_state: Optional[BrokerState]) -> QQQConcentrationAssessment:
+    """Pure. Layer 1 — QQQ CORE concentration control, entirely independent
+    of evaluate()'s Layer 2 total-exposure tier above: QQQ can be well past
+    its own hard limit while total exposure sits at/under 105%, and vice
+    versa (see config.py QQQ_CORE_SOFT_LIMIT_PCT/QQQ_CORE_HARD_LIMIT_PCT
+    docstring). Same denominator as plan_rebalance()'s existing
+    QQQ_EXCESS_TRIM leg below: QQQ broker market value / broker_state.
+    total_assets (mark-to-market), never portfolio/tracker.py's cost-basis
+    figure — this doesn't change that existing convention, just reuses it."""
+    if broker_state is None or broker_state.total_assets is None or broker_state.total_assets <= 0:
+        return QQQConcentrationAssessment(
+            tier=TIER_UNKNOWN, qqq_pct=None, qqq_value=None,
+            total_assets=getattr(broker_state, "total_assets", None),
+            reason="broker state unavailable or total_assets<=0")
+
+    qqq_pos = broker_state.positions.get(config.QQQ_CORE_CODE)
+    qqq_value = qqq_pos.market_val if qqq_pos else 0.0
+    qqq_qty = qqq_pos.qty if qqq_pos else 0.0
+    qqq_pct = qqq_value / broker_state.total_assets
+    if qqq_pct <= config.QQQ_CORE_SOFT_LIMIT_PCT:
+        tier = QQQ_TIER_NORMAL
+    elif qqq_pct <= config.QQQ_CORE_HARD_LIMIT_PCT:
+        tier = QQQ_TIER_OVERWEIGHT
+    else:
+        tier = QQQ_TIER_HARD_LIMIT
+
+    return QQQConcentrationAssessment(tier=tier, qqq_pct=qqq_pct, qqq_value=qqq_value,
+                                       total_assets=broker_state.total_assets, qqq_qty=qqq_qty)
+
+
+def plan_qqq_core_trim(broker_state: Optional[BrokerState]) -> List[RebalanceOrder]:
+    """Pure. Layer 1 hard-limit trim plan — fires only when QQQ alone (not
+    total portfolio exposure) is past config.QQQ_CORE_HARD_LIMIT_PCT of
+    broker total_assets. Trims down to config.QQQ_CORE_TRIM_TARGET_PCT
+    (~30%-32%), a gentle walk-down, NOT all the way back to the 25%
+    strategic target — a rally that pushes QQQ just over the hard limit
+    shouldn't force a large one-shot sell. Completely independent of
+    plan_rebalance()'s EMERGENCY-tier QQQ_EXCESS_TRIM leg below (that one
+    only runs when total exposure > 105% and trims to the 25% floor
+    instead) — callers must not run both in the same pass on purpose (see
+    engine/runner.py's call site)."""
+    assessment = evaluate_qqq_concentration(broker_state)
+    if assessment.tier != QQQ_TIER_HARD_LIMIT:
+        return []
+
+    qqq_pos = broker_state.positions.get(config.QQQ_CORE_CODE)
+    if qqq_pos is None or qqq_pos.market_val <= 0 or qqq_pos.current_price <= 0:
+        return []
+
+    trim_target_value = config.QQQ_CORE_TRIM_TARGET_PCT * broker_state.total_assets
+    excess_value = qqq_pos.market_val - trim_target_value
+    min_trade = config.PORTFOLIO_REBALANCE_MIN_TRADE_USD
+    if excess_value <= min_trade:
+        return []
+
+    sell_qty = int(excess_value // qqq_pos.current_price)
+    sell_qty = min(sell_qty, int(qqq_pos.qty))
+    sell_value = sell_qty * qqq_pos.current_price
+    if sell_qty <= 0 or sell_value < min_trade:
+        return []
+
+    return [RebalanceOrder(config.QQQ_CORE_CODE, sell_qty, qqq_pos.current_price,
+                            "QQQ_CORE_HARD_LIMIT_TRIM", 1)]
 
 
 def reconcile(broker_state: Optional[BrokerState],
@@ -297,6 +381,56 @@ def log_snapshot(assessment: RiskAssessment, diffs: List[ReconciliationDiff],
         pass
 
 
+def log_qqq_snapshot(assessment: QQQConcentrationAssessment, trim_plan: List[RebalanceOrder],
+                      executed_orders: List[dict], skip_reason: Optional[str] = None) -> None:
+    """Append one JSON line per run_once() pass covering the QQQ CORE
+    concentration check (Layer 1) — mirrors log_snapshot() above but for
+    this independent layer, so a NORMAL/CORE_OVERWEIGHT pass still leaves an
+    audit row (weight, tier, no plan), not just HARD_LIMIT passes. Records
+    the fields needed to answer "would this have traded, for how much, and
+    to what estimated resulting weight" without needing AUTO_EXECUTE on:
+    QQQ market value/shares/weight, the configured hard-limit/trim-target
+    thresholds, and — when trim_plan is non-empty — the computed trim USD/
+    shares and the estimated post-trim weight.
+
+    skip_reason is caller-supplied for cases where a trim WAS computed but
+    deliberately not run this pass (e.g. "EMERGENCY_ACTIVE" — see engine/
+    runner.py's call site); when the caller passes None and the tier is
+    CORE_HARD_LIMIT with an empty trim_plan, this infers "BELOW_MIN_TRADE_
+    SIZE" (the only other reason plan_qqq_core_trim() returns no order at
+    that tier) so the log never leaves an unexplained "hard limit but no
+    order" row. Never raises."""
+    try:
+        _QQQ_RISK_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        order = trim_plan[0] if trim_plan else None
+        if skip_reason is None and assessment.tier == QQQ_TIER_HARD_LIMIT and order is None:
+            skip_reason = "BELOW_MIN_TRADE_SIZE"
+        trim_usd = (order.sell_qty * order.price) if order else None
+        post_trim_value = (assessment.qqq_value - trim_usd) if order else None
+        post_trim_pct = (post_trim_value / assessment.total_assets
+                          if order and assessment.total_assets else None)
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "qqq_market_value": assessment.qqq_value,
+            "total_assets": assessment.total_assets,
+            "qqq_weight_pct": assessment.qqq_pct,
+            "qqq_shares": assessment.qqq_qty,
+            "tier": assessment.tier,
+            "hard_limit_pct": config.QQQ_CORE_HARD_LIMIT_PCT,
+            "trim_target_pct": config.QQQ_CORE_TRIM_TARGET_PCT,
+            "trim_shares": order.sell_qty if order else None,
+            "trim_price": order.price if order else None,
+            "trim_usd": trim_usd,
+            "estimated_post_trim_weight_pct": post_trim_pct,
+            "executed": bool(executed_orders),
+            "skip_reason": skip_reason,
+        }
+        with open(_QQQ_RISK_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def log_diff(diff: ReconciliationDiff) -> None:
     """Append one JSON line per reconciliation mismatch — always written,
     regardless of config.RECONCILIATION_IGNORE_CODES (that list only
@@ -342,6 +476,53 @@ def check_and_update_diff_growth(diffs: List[ReconciliationDiff]) -> Dict[str, b
         return grew
     except Exception:
         return {}
+
+
+def check_qqq_trim_preview_repeat(sell_qty: Optional[int]) -> bool:
+    """Best-effort. De-duplicates the QQQ CORE HARD LIMIT [预览] push (see
+    engine/runner.py::_run_qqq_core_trim()'s preview branch) — price noise
+    alone reshuffles plan_qqq_core_trim()'s sell_qty by a share or two almost
+    every pass even when the underlying ~35%+ overweight situation hasn't
+    materially changed (2026-09-15: user reported 46/48/47 shares three
+    passes in a row), which would otherwise push a near-identical DingTalk/
+    Telegram message every ~5 minutes forever.
+
+    Compares against the sell_qty from the LAST PUSH this function actually
+    returned True for (persisted in a tiny JSON file, same idea as
+    check_and_update_diff_growth() above) — deliberately NOT the previous
+    pass's value, unlike that sibling function: sell_qty's own pass-to-pass
+    noise is exactly what needs smoothing out here, so comparing to the last
+    pass would barely deduplicate anything. Returns True (alert) when there
+    is no prior push recorded, or the change since the last pushed value is
+    >= config.QQQ_CORE_TRIM_PREVIEW_ALERT_CHANGE_SHARES; False otherwise
+    (caller should still log locally, just not push).
+
+    sell_qty=None means no active trim plan this pass (tier fell back to
+    OVERWEIGHT/NORMAL, or below min-trade-size) — clears the stored baseline
+    so a future re-entry into CORE_HARD_LIMIT alerts fresh instead of
+    comparing against a stale number from a previous, unrelated episode; and
+    returns False since there's nothing to alert about. Never raises — on
+    any I/O failure, fails open (returns True) rather than silently going
+    quiet on a real risk condition."""
+    try:
+        _QQQ_TRIM_PREVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if sell_qty is None:
+            if _QQQ_TRIM_PREVIEW_PATH.exists():
+                _QQQ_TRIM_PREVIEW_PATH.unlink()
+            return False
+        try:
+            with open(_QQQ_TRIM_PREVIEW_PATH, "r", encoding="utf-8") as f:
+                last_pushed = json.load(f).get("sell_qty")
+        except (FileNotFoundError, json.JSONDecodeError):
+            last_pushed = None
+        should_alert = (last_pushed is None or
+                         abs(sell_qty - last_pushed) >= config.QQQ_CORE_TRIM_PREVIEW_ALERT_CHANGE_SHARES)
+        if should_alert:
+            with open(_QQQ_TRIM_PREVIEW_PATH, "w", encoding="utf-8") as f:
+                json.dump({"sell_qty": sell_qty}, f)
+        return should_alert
+    except Exception:
+        return True
 
 
 def try_acquire_rebalance_lock() -> str:

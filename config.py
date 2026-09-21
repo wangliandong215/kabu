@@ -356,9 +356,12 @@ PORTFOLIO_RISK_TIER3_PCT:          float = 1.00   # >100%：警戒级暂停
 PORTFOLIO_RISK_EMERGENCY_PCT:      float = 1.05   # >105%：触发强制再平衡
 PORTFOLIO_RISK_REBALANCE_TARGET:   float = 0.95   # 再平衡卖到约这个比例
 PORTFOLIO_REBALANCE_MIN_TRADE_USD: float = 1000.0 # 低于这个金额的再平衡零头不卖，避免碎片化小单
-RECONCILIATION_IGNORE_CODES: list = ["US.0000"]   # 已退市EA的broker幽灵持仓
-    # （qty=247/市值$0，见project memory「EA delisting adjustment」）——
-    # 每轮仍写入reconciliation_diffs.jsonl存档，只是不再触发alert.error刷屏。
+RECONCILIATION_IGNORE_CODES: list = ["US.0000", "US.QQQ"]   # 已退市EA的broker
+    # 幽灵持仓（qty=247/市值$0，见project memory「EA delisting adjustment」）+
+    # QQQ的124股tracker.json记账缺口（broker=473 tracker=349，2026-08-31起
+    # 稳定不变，根因未查，见project memory「Portfolio Risk Manager v2.10」）——
+    # 每轮仍写入reconciliation_diffs.jsonl存档，差值若扩大仍会触发alert.error，
+    # 只是差值不变时不再触发推送刷屏。
 
 # ── v2.10.1 上线前安全加固（2026-08-29）────────────────────────────────────────
 # 背景：v2.10刚建好还没下过一笔真实单。EMERGENCY再平衡默认强制走DRY RUN——
@@ -967,6 +970,65 @@ NAME_MAP: dict = {
 QQQ_CORE_CODE:         str   = "US.QQQ"
 QQQ_CORE_TARGET_PCT:   float = 0.25   # 固定目标仓位占比，20%~30%区间内可调
 QQQ_MA_PERIOD:         int   = 200    # 跌破即清仓（大趋势走坏），重新站上再买回
+
+# ── QQQ CORE concentration control（v2.11，2026-09-11）─────────────────────────
+# QQQ_CORE_TARGET_PCT 只是建仓/补仓目标，从来不是持续上限——只要账户总仓位没
+# 触发下面 Portfolio Risk Manager 的 >105% EMERGENCY，QQQ 市值就会随涨幅一路
+# 自然漂移上去，不受25%约束（2026-09-11实测：账户总仓位仍<105%，但QQQ已经
+# 涨到总资产的35.30%）。这里新增一层完全独立于总仓位EMERGENCY的"QQQ自身占比"
+# 三层结构，不触碰QQQ的MA200死仓进出场逻辑，也不改总仓位>105% EMERGENCY：
+#   qqq_pct <= QQQ_CORE_SOFT_LIMIT_PCT(30%)                 NORMAL — 不干预
+#   30% < qqq_pct <= QQQ_CORE_HARD_LIMIT_PCT(35%)           CORE_OVERWEIGHT —
+#     只标记+暂停新增买入（跳过下面的QQQ底仓补仓逻辑），不主动卖出
+#   qqq_pct > QQQ_CORE_HARD_LIMIT_PCT(35%)                  CORE_HARD_LIMIT —
+#     才允许主动trim，且只温和回落到 QQQ_CORE_TRIM_TARGET_PCT（约32%），
+#     不会一次性砍回25%目标，避免CORE仓位被短期涨幅逼着频繁大幅交易。
+# 分母跟risk/portfolio_risk_manager.py既有的plan_rebalance() QQQ_EXCESS_TRIM
+# 一致：QQQ broker市值 / broker total_assets（mark-to-market口径），不是
+# portfolio/tracker.py的成本价口径——这次升级不改变整个系统的仓位计算定义。
+QQQ_CORE_SOFT_LIMIT_PCT:  float = 0.30   # 超过：CORE_OVERWEIGHT，暂停新增买入，不卖
+QQQ_CORE_HARD_LIMIT_PCT:  float = 0.35   # 超过：CORE_HARD_LIMIT，允许主动trim
+QQQ_CORE_TRIM_TARGET_PCT: float = 0.32   # trim的温和目标（30%~32%区间），不是25%
+# 这层逻辑刚上线、还没做过真实trim——沿用PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE
+# 当年的先例，默认关闭真实下单：即使confirmed=True，命中CORE_HARD_LIMIT也只打
+# 印[预览]，不会真的产生卖单。避免部署当天就为了当前35.30%这种刚过线的小幅
+# 超限，触发一笔非预期的真实卖单；人工用dry-run验证过trim行为后再手动打开。
+QQQ_CORE_TRIM_AUTO_EXECUTE: bool = False
+# 2026-09-15：用户反馈[预览]推送每轮都刷屏（46股/48股/47股连续三轮，纯粹是
+# 价格波动导致sell_qty整数取整跳动，QQQ真实占比几乎没变）——加一个反重复
+# 推送的死区：只有这轮算出的sell_qty跟"上一次实际推送过的"那个值相差达到
+# 下面这个股数时才再推一次，否则降级成只写日志/控制台，不推手机。跟
+# reconciliation_diffs那条"扩大才报"的思路一致，但比较基准是"上次推送值"
+# 而不是"上一轮的值"，因为sell_qty本身逐轮噪声就有±1~2股，比对上一轮会
+# 完全失效（见risk/portfolio_risk_manager.py::check_qqq_trim_preview_repeat()
+# docstring）。
+QQQ_CORE_TRIM_PREVIEW_ALERT_CHANGE_SHARES: int = 5
+
+# ── Portfolio Position Manager（v2.12，2026-09-15，Phase 2 Observation Mode）──
+# 在v2.10 Layer2（总仓位95/100/105%，见assessment.tier）、v2.11 Layer1（QQQ
+# 自身30/35%，见上面QQQ_CORE_SOFT_LIMIT_PCT）之外，新增第三层账户级"总仓位
+# 天花板"——按市场regime动态收紧允许买入的总敞口，专门解决"大跌卖出后现金
+# 增加、Entry Engine又把仓位买回去"的仓位来回震荡问题。只作用于NEW BUY
+# （2a/2b/2c/2d四条买入路径），完全不碰STOP_LOSS/STRATEGY_EXIT/ATR_TRAIL/
+# QQQ MA200/Emergency Rebalance/macro_block/assessment.tier——这些既有卖出
+# 逻辑和总仓位95/100/105%三档判断原样不动，本模块的regime天花板只会让可买
+# 空间更小或不变，不会让它更大（BULL档100%高于既有95% PAUSE_NEW门槛时，
+# 95%那道硬顶依然生效，本模块此时不额外收紧）。见
+# risk/portfolio_position_manager.py模块docstring。
+#
+# 下面这张 regime->上限 的表是 INITIAL / NOT VALIDATED 占位参数，不是最终
+# 生产参数——第一版只负责把"账户级仓位闸门"这个机制建起来，具体数值要等
+# Paper Trading + Backtest跑出数据后再调（用户2026-09-15明确要求）。
+PORTFOLIO_POSITION_MANAGER_ENABLED: bool = False   # 观察模式：只计算敞口预
+    # 算+写日志（C:\KabuData\portfolio\position_manager_log.jsonl），不影响
+    # 任何实际下单数量。改成True之前必须先完成一段时间的Paper Trading/
+    # Backtest验证（用户明确要求，Phase 2实现完成后不自动开启）。
+PORTFOLIO_REGIME_MAX_EXPOSURE: dict = {   # INITIAL / NOT VALIDATED placeholder
+    "BULL":     1.00,
+    "NORMAL":   0.90,
+    "CAUTION":  0.75,
+    "RISK_OFF": 0.50,
+}
 
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"

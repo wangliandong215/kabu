@@ -358,6 +358,109 @@ class TestLogEntryQuality(TradeTrackerTestCase):
         self.assertEqual(rows[0]["trade_id"], trade_id)
 
 
+class TestLogExitDiagnostics(TradeTrackerTestCase):
+    """v2.9.x Exit Diagnostics — observation-only trade-shape classification
+    built during the 2026-09 STRATEGY_EXIT giveback investigation. See
+    engine/exit_diagnostics.py."""
+
+    def _open(self, trade_id="t1", entry_price=100.0, shares=10):
+        self.tracker.log_entry(
+            trade_id=trade_id, ticker="US.AAPL", strategy_name="atr_breakout",
+            strategy_version="2.9", direction="LONG", price=entry_price,
+            shares=shares, position_value=entry_price * shares,
+            position_pct=0.1, cash=9000.0, equity=10000.0,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    def test_writes_row_after_log_exit(self):
+        self._open()
+        # 20% MFE, closes +10% -> 50% giveback, below the 75% extreme bar
+        self.tracker.update_position_metrics(
+            trade_id="t1", date="2026-01-01", close=110.0,
+            entry_price=100.0, shares=10, high=120.0, low=99.0,
+        )
+        self.tracker.log_exit(
+            trade_id="t1", price=110.0, cash=1.0, equity=1.0,
+            timestamp="2026-01-05T00:00:00", exit_reason="STRATEGY_EXIT(atr_breakout)",
+        )
+        self.tracker.log_exit_diagnostics(
+            trade_id="t1", stop_loss_triggered=False, strategy_exit_triggered=True)
+
+        row = self._raw("SELECT * FROM trade_exit_diagnostics WHERE trade_id='t1'")[0]
+        self.assertEqual(row["exit_category"], "PROFIT_GIVEBACK")
+        self.assertAlmostEqual(row["mfe_pct"], 0.20)
+        self.assertAlmostEqual(row["giveback_pct"], 0.50)
+        self.assertAlmostEqual(row["mfe_capture"], 0.50)
+        self.assertEqual(row["stop_loss_triggered"], 0)
+        self.assertEqual(row["strategy_exit_triggered"], 1)
+        self.assertIsNotNone(row["recorded_at"])
+
+    def test_early_failure_classification_end_to_end(self):
+        self._open()
+        self.tracker.update_position_metrics(
+            trade_id="t1", date="2026-01-01", close=100.5,
+            entry_price=100.0, shares=10, high=101.0, low=95.0,
+        )
+        self.tracker.log_exit(
+            trade_id="t1", price=95.0, cash=1.0, equity=1.0,
+            timestamp="2026-01-05T00:00:00", exit_reason="STRATEGY_EXIT(atr_breakout)",
+        )
+        self.tracker.log_exit_diagnostics(trade_id="t1", strategy_exit_triggered=True)
+        row = self._raw("SELECT * FROM trade_exit_diagnostics WHERE trade_id='t1'")[0]
+        self.assertEqual(row["exit_category"], "EARLY_FAILURE")
+
+    def test_unknown_trade_id_is_noop_not_error(self):
+        # No log_entry()/log_exit() first — must not raise.
+        self.tracker.log_exit_diagnostics(trade_id="never-existed")
+        rows = self._raw("SELECT * FROM trade_exit_diagnostics")
+        self.assertEqual(len(rows), 0)
+
+    def test_still_open_trade_is_noop_not_error(self):
+        # entry only, no exit_time yet -> the "AND exit_time IS NOT NULL"
+        # guard must skip it rather than classifying a mid-flight trade.
+        self._open()
+        self.tracker.log_exit_diagnostics(trade_id="t1")
+        rows = self._raw("SELECT * FROM trade_exit_diagnostics")
+        self.assertEqual(len(rows), 0)
+
+    def test_same_trade_id_overwrites_not_crashes(self):
+        self._open()
+        self.tracker.update_position_metrics(
+            trade_id="t1", date="2026-01-01", close=110.0,
+            entry_price=100.0, shares=10, high=110.0, low=99.0,
+        )
+        self.tracker.log_exit(
+            trade_id="t1", price=110.0, cash=1.0, equity=1.0,
+            timestamp="2026-01-05T00:00:00", exit_reason="STRATEGY_EXIT(atr_breakout)",
+        )
+        self.tracker.log_exit_diagnostics(trade_id="t1", strategy_exit_triggered=True)
+        self.tracker.log_exit_diagnostics(trade_id="t1", strategy_exit_triggered=True)
+        rows = self._raw("SELECT * FROM trade_exit_diagnostics WHERE trade_id='t1'")
+        self.assertEqual(len(rows), 1)
+
+    def test_query_exit_diagnostics_joins_trades(self):
+        self._open()
+        self.tracker.update_position_metrics(
+            trade_id="t1", date="2026-01-01", close=110.0,
+            entry_price=100.0, shares=10, high=120.0, low=99.0,
+        )
+        self.tracker.log_exit(
+            trade_id="t1", price=110.0, cash=1.0, equity=1.0,
+            timestamp="2026-01-05T00:00:00", exit_reason="STRATEGY_EXIT(atr_breakout)",
+        )
+        self.tracker.log_exit_diagnostics(trade_id="t1", strategy_exit_triggered=True)
+        df = self.tracker.query_exit_diagnostics()
+        self.assertEqual(len(df), 1)
+        row = df.iloc[0]
+        self.assertEqual(row["symbol"], "US.AAPL")
+        self.assertAlmostEqual(row["pnl"], 100.0)
+        self.assertEqual(row["exit_category"], "PROFIT_GIVEBACK")
+
+    def test_query_exit_diagnostics_empty_when_no_rows(self):
+        df = self.tracker.query_exit_diagnostics()
+        self.assertTrue(df.empty)
+
+
 class TestLogResearchSnapshot(TradeTrackerTestCase):
     """v2.11.1 — permanent, write-once Trade Research Snapshot. See
     engine/research_snapshot.py and trade_research_snapshot's schema

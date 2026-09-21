@@ -12,9 +12,10 @@ Security constraints enforced here:
 """
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import config
 import notify.alert as alert
@@ -35,11 +36,13 @@ from engine import market_context
 from engine.market_hours import filter_open, should_notify_close, should_notify_open, is_daytime_jst
 from portfolio import capacity_manager
 from portfolio import broker_state as broker_state_mod
+from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
-from risk import guard, sizing, portfolio_risk_manager
+from risk import guard, sizing, portfolio_risk_manager, portfolio_position_manager
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
-                                   compute_parameter_hash)
+                                   compute_parameter_hash, normalize_exit_reason,
+                                   EXIT_STOP_LOSS, EXIT_STRATEGY_SIGNAL)
 
 
 def select_watchlist() -> List[str]:
@@ -242,6 +245,17 @@ def run_once(
                             )
                         except Exception as exc:
                             alert.log(f"trade_tracker: log_exit failed {code} — {exc}")
+                        try:
+                            # v2.9.x Exit Diagnostics — observation only, see
+                            # engine/exit_diagnostics.py's module docstring.
+                            code_norm = normalize_exit_reason("MA200_BREAK")
+                            tracker.log_exit_diagnostics(
+                                trade_id=_trade_id(code, closed.get("entry_time")),
+                                stop_loss_triggered=(code_norm == EXIT_STOP_LOSS),
+                                strategy_exit_triggered=(code_norm == EXIT_STRATEGY_SIGNAL),
+                            )
+                        except Exception as exc:
+                            alert.log(f"trade_tracker: log_exit_diagnostics failed {code} — {exc}")
             continue   # 跳过下面的普通持仓退出逻辑
 
         # Gather the SELL/HOLD signal from the strategy that opened this position.
@@ -305,6 +319,17 @@ def run_once(
                         )
                     except Exception as exc:
                         alert.log(f"trade_tracker: log_exit failed {code} — {exc}")
+                    try:
+                        # v2.9.x Exit Diagnostics — observation only, see
+                        # engine/exit_diagnostics.py's module docstring.
+                        code_norm = normalize_exit_reason(reason)
+                        tracker.log_exit_diagnostics(
+                            trade_id=_trade_id(code, closed.get("entry_time")),
+                            stop_loss_triggered=(code_norm == EXIT_STOP_LOSS),
+                            strategy_exit_triggered=(code_norm == EXIT_STRATEGY_SIGNAL),
+                        )
+                    except Exception as exc:
+                        alert.log(f"trade_tracker: log_exit_diagnostics failed {code} — {exc}")
 
     # ── v2.10 Portfolio Risk Manager — broker ground-truth exposure control ──
     # 用真实broker持仓市值/现金分级（见risk/portfolio_risk_manager.py docstring
@@ -313,6 +338,10 @@ def run_once(
     # pass跳过：那是独立的虚拟资金池，跟真实US broker账户无关。
     risk_block = None
     remaining_broker_cash = None
+    qqq_concentration = None
+    assessment = None   # stays None off the is_jp_pass/broker-fetch-failure paths;
+                         # v2.12 Portfolio Position Manager below reads assessment.long_mv/
+                         # total_assets and guards on `assessment is not None`.
     if not is_jp_pass:
         broker_state = None
         try:
@@ -343,7 +372,10 @@ def run_once(
             executed_orders = []
             if assessment.tier in (portfolio_risk_manager.TIER_PAUSE, portfolio_risk_manager.TIER_WARNING):
                 risk_block = f"PORTFOLIO_RISK_{assessment.tier}: exposure {assessment.exposure_pct:.1%}"
-                alert.warn(risk_block + " — 暂停新增买入，不强制卖出")
+                # 手机推送每天每档最多一条（见notify/alert.py:warn_state）——
+                # tier不变的话，同一档位反复触发不用每轮--interval都推一次。
+                alert.warn_state(f"portfolio_risk_{assessment.tier}",
+                                  risk_block + " — 暂停新增买入，不强制卖出")
             elif assessment.tier == portfolio_risk_manager.TIER_EMERGENCY:
                 risk_block = f"PORTFOLIO_RISK_EMERGENCY: exposure {assessment.exposure_pct:.1%}"
                 alert.error(risk_block + f" — 触发强制再平衡，目标回落至"
@@ -362,6 +394,64 @@ def run_once(
                 remaining_broker_cash += sum(o["price"] * o["sell_qty"] for o in executed_orders)
 
             portfolio_risk_manager.log_snapshot(assessment, diffs, executed_orders)
+
+            # ── QQQ CORE concentration control (Layer 1, v2.11) — entirely
+            # independent of the exposure tier above (Layer 2): QQQ can be
+            # past its own hard limit while total exposure is nowhere near
+            # 105%, and vice versa (see config.py QQQ_CORE_SOFT_LIMIT_PCT/
+            # QQQ_CORE_HARD_LIMIT_PCT docstring). Skipped when EMERGENCY
+            # already fired this pass — plan_rebalance()'s own
+            # QQQ_EXCESS_TRIM leg above already trims QQQ (down to the 25%
+            # floor, more aggressively than this layer's ~30-32% target)
+            # whenever total exposure > 105%, so running both in the same
+            # pass would just double-sell the same position.
+            qqq_concentration = portfolio_risk_manager.evaluate_qqq_concentration(broker_state)
+            if qqq_concentration.tier != portfolio_risk_manager.TIER_UNKNOWN:
+                alert.log(f"QQQ CORE concentration: {qqq_concentration.qqq_pct:.1%}"
+                          f"  tier={qqq_concentration.tier}  {qqq_concentration.qqq_qty:.0f}股")
+            # Computed once here (pure, no extra fetch — reuses this pass's
+            # broker_state) so the audit log below and the preview/execute
+            # call further down always agree on the same plan.
+            qqq_trim_plan = portfolio_risk_manager.plan_qqq_core_trim(broker_state)
+            qqq_trim_executed: List[dict] = []
+            qqq_trim_skip_reason = None
+            if qqq_trim_plan and assessment.tier == portfolio_risk_manager.TIER_EMERGENCY:
+                # plan_rebalance()'s own QQQ_EXCESS_TRIM leg above already
+                # trims QQQ this pass (down to the 25% floor, more
+                # aggressively than this layer's ~30-32% target) — running
+                # this trim too would double-sell the same position.
+                qqq_trim_skip_reason = "EMERGENCY_ACTIVE"
+                alert.log("QQQ CORE trim: SKIP — EMERGENCY再平衡本轮已经处理过QQQ，不重复下单")
+            elif qqq_trim_plan:
+                trim_confirmed = confirmed and config.QQQ_CORE_TRIM_AUTO_EXECUTE
+                qqq_trim_result = _run_qqq_core_trim(
+                    portfolio=portfolio, trd_env=trd_env, env_label=env_label,
+                    confirmed=trim_confirmed, ktype=ktype, bars=bars,
+                    broker_state=broker_state, tracker=tracker,
+                )
+                # _run_qqq_core_trim() returns a non-empty list in preview
+                # mode too (the dict(s) that WOULD be sold — same convention
+                # as _run_emergency_rebalance() above), so it must not be
+                # treated as "really executed" on its own. Only count it
+                # as executed — for both the cash credit below and the
+                # audit log's "executed" field — when trim_confirmed was
+                # actually True this pass; otherwise a preview pass would
+                # both mislabel the log row as executed=true AND credit
+                # remaining_broker_cash with proceeds from a sale that never
+                # happened, letting other same-pass buys size off phantom cash.
+                qqq_trim_executed = qqq_trim_result if trim_confirmed else []
+                if qqq_trim_executed:
+                    remaining_broker_cash += sum(o["price"] * o["sell_qty"] for o in qqq_trim_executed)
+            elif qqq_concentration.tier == portfolio_risk_manager.QQQ_TIER_HARD_LIMIT:
+                # Past the hard limit but plan_qqq_core_trim() returned no
+                # order — the only reason left is the excess falling below
+                # config.PORTFOLIO_REBALANCE_MIN_TRADE_USD. Called out
+                # explicitly so "hard limit triggered but no order" is never
+                # ambiguous in the logs.
+                alert.log(f"QQQ CORE trim: SKIP — below minimum trade size "
+                          f"(PORTFOLIO_REBALANCE_MIN_TRADE_USD=${config.PORTFOLIO_REBALANCE_MIN_TRADE_USD:,.0f})")
+            portfolio_risk_manager.log_qqq_snapshot(
+                qqq_concentration, qqq_trim_plan, qqq_trim_executed, skip_reason=qqq_trim_skip_reason)
 
     # ── Macro news circuit breaker (checked once per pass) ───────────────────
     macro_block = news_sentiment.macro_circuit_breaker()
@@ -405,6 +495,36 @@ def run_once(
             alert.log(f"runner: market weather code={weather_code}")
     except Exception as exc:
         alert.warn(f"大盘熔断/天气检测失败 — {exc}")
+
+    # ── v2.12 Portfolio Position Manager (Phase 2, Observation Mode) ─────────
+    # Account-level exposure ceiling, additive to (never replacing) the
+    # v2.10/v2.11 layers above — see risk/portfolio_position_manager.py
+    # module docstring and config.py's PORTFOLIO_POSITION_MANAGER_ENABLED
+    # comment. Skipped for is_jp_pass (separate virtual cash pool, no broker
+    # exposure to manage) and when this pass's broker fetch failed
+    # (assessment stays None — that failure already sets risk_block ->
+    # macro_block, which blocks every buy section below on its own).
+    #
+    # A fresh, independent _qqq_above_ma() call here (not reusing the one
+    # the QQQ Beta floor section further below makes) — deliberately not
+    # touching that existing call site, so this addition can never change
+    # QQQ MA200 behavior even by accident.
+    pm_state = None
+    if not is_jp_pass and assessment is not None:
+        pm_regime = portfolio_position_manager.classify_market_regime(
+            weather_code=weather_code, qqq_above_ma=_qqq_above_ma(),
+            drawdown_halt=drawdown_halt)
+        pm_budget = portfolio_position_manager.compute_exposure_budget(
+            pm_regime, assessment.long_mv, assessment.total_assets)
+        if pm_budget.remaining_budget is not None:
+            alert.log(f"portfolio_position_manager: regime={pm_regime}  "
+                      f"敞口{pm_budget.current_exposure_pct:.1%}/{pm_budget.max_exposure_pct:.0%}  "
+                      f"剩余额度${pm_budget.remaining_budget:,.0f}"
+                      + ("" if config.PORTFOLIO_POSITION_MANAGER_ENABLED
+                         else "（观察模式，不影响实际下单）"))
+        pm_state = _PMPassState(enabled=config.PORTFOLIO_POSITION_MANAGER_ENABLED,
+                                 regime=pm_regime, budget=pm_budget,
+                                 remaining_budget=pm_budget.remaining_budget)
 
     # ── 2a. Half-Kelly state ──────────────────────────────────────────────────
     kelly_factor = 0.5 if portfolio.is_headwind() else 1.0
@@ -457,6 +577,11 @@ def run_once(
                 add_qty = int((portfolio.available_cash() * 0.98) / price)
             if add_qty <= 0:
                 continue
+            add_qty, pm_allowed_2a = _pm_plan_buy(
+                pm_state, section="2A_TRIAL_PROMOTE", code=code,
+                requested_qty=add_qty, price=price)
+            if add_qty <= 0:
+                continue
 
             alert.info(f"{code} 试错仓位转正（early→confirmed），"
                        f"加仓{add_qty}股 @{price:.4f}")
@@ -467,6 +592,7 @@ def run_once(
             if confirmed and fill["dealt_qty"] > 0:
                 filled_qty = int(fill["dealt_qty"])
                 fill_price = fill["dealt_avg_price"] or price
+                _pm_record_fill(pm_state, pm_allowed_2a, filled_qty, fill_price)
                 portfolio.add_to_position(code, fill_price, filled_qty, strength,
                                           strategy="atr_breakout")
                 alert.trade_buy(
@@ -524,6 +650,11 @@ def run_once(
 
             if add_qty <= 0:
                 continue
+            add_qty, pm_allowed_2b = _pm_plan_buy(
+                pm_state, section="2B_PYRAMID", code=code,
+                requested_qty=add_qty, price=price)
+            if add_qty <= 0:
+                continue
 
             alert.info(f"{code} 加仓（金字塔），+{add_qty}股，"
                        f"信号强度{old_str:.0%}→{new_str:.0%}，"
@@ -535,6 +666,7 @@ def run_once(
             if confirmed and fill["dealt_qty"] > 0:
                 filled_qty = int(fill["dealt_qty"])
                 fill_price = fill["dealt_avg_price"] or price
+                _pm_record_fill(pm_state, pm_allowed_2b, filled_qty, fill_price)
                 portfolio.add_to_position(code, fill_price, filled_qty, new_str)
                 alert.trade_buy(
                     code, fill_price, filled_qty,
@@ -658,6 +790,12 @@ def run_once(
         if qty <= 0:
             alert.warn_skip(code, f"{code} 现价{price:.4f}下可买股数为0（含真实现金约束），跳过")
             continue
+        qty, pm_allowed_2c = _pm_plan_buy(
+            pm_state, section="2C_NEW_ENTRY", code=code,
+            requested_qty=qty, price=price)
+        if qty <= 0:
+            alert.warn_skip(code, f"{code} 被Portfolio Position Manager阻止（敞口预算不足），跳过")
+            continue
 
         alert.info(f"准备买入 {code}，{qty}股 @{price:.4f}，"
                    f"信号强度{cand.signal_strength:.0%}，"
@@ -676,6 +814,7 @@ def run_once(
             fill_price = fill["dealt_avg_price"] or price
             if remaining_broker_cash is not None:
                 remaining_broker_cash -= fill_price * filled_qty
+            _pm_record_fill(pm_state, pm_allowed_2c, filled_qty, fill_price)
             # Persist entry_atr so ATR trailing stop can be reconstructed after restart.
             # score_label/total_score persisted too so this position can itself be
             # considered as a future Active Replacement victim (see
@@ -776,97 +915,118 @@ def run_once(
 
     if not is_jp_pass and not macro_block:
         if _qqq_above_ma():
-            target_value = config.QQQ_CORE_TARGET_PCT * portfolio.total_capital()
-            shortfall    = target_value - qqq_held_value
-            qqq_price    = get_price(config.QQQ_CORE_CODE) if shortfall > 0 else 0.0
-            spend        = min(portfolio.available_cash() * 0.98, shortfall) if shortfall > 0 else 0.0
-            # v2.10 现金红线：跟2c的活跃仓位买入同一约束，不能把broker真实现金
-            # 买成负数——remaining_broker_cash为None（本轮broker取数失败）时不
-            # 加这层，risk_block已经把macro_block整体挡死。
-            if remaining_broker_cash is not None:
-                spend = min(spend, remaining_broker_cash)
-            if qqq_price > 0 and spend > qqq_price:
-                qty = int(spend / qqq_price)
-                if qty > 0:
-                    action = "补仓" if qqq_position is not None else "买入"
-                    alert.info(f"QQQ底仓{action} {qty}股 @{qqq_price:.2f}"
-                               f"（目标仓位{config.QQQ_CORE_TARGET_PCT:.0%}，"
-                               f"当前{qqq_held_value / portfolio.total_capital():.1%}，"
-                               f"站上MA{config.QQQ_MA_PERIOD}）")
-                    fill = _place_order(
-                        code=config.QQQ_CORE_CODE, side="BUY",
-                        qty=qty, price=qqq_price,
-                        trd_env=trd_env, env_label=env_label, confirmed=confirmed,
-                    )
-                    if confirmed and fill["dealt_qty"] > 0:
-                        filled_qty = int(fill["dealt_qty"])
-                        fill_price = fill["dealt_avg_price"] or qqq_price
-                        if remaining_broker_cash is not None:
-                            remaining_broker_cash -= fill_price * filled_qty
-                        if qqq_position is not None:
-                            # 补仓走pyramid同款的add_to_position——跟2b的scale-in
-                            # 一样只更新qty/avg_cost，不新开Trade Intelligence DB
-                            # 记录（那条记录的trade_id绑定在原始entry_time上）。
-                            portfolio.add_to_position(
-                                config.QQQ_CORE_CODE, fill_price, filled_qty,
-                                new_strength=1.0, strategy="core_etf",
-                            )
-                            alert.trade_buy(
-                                config.QQQ_CORE_CODE, fill_price, filled_qty,
-                                sector="etf", score=None, score_label="CORE_ETF",
-                                stop_price=None,
-                                position_pct=(qqq_held_value + fill_price * filled_qty) / portfolio.total_capital(),
-                                cash_available=portfolio.available_cash(),
-                                position_count=portfolio.position_count(),
-                                trade_id=portfolio.next_trade_id(), env=env_label,
-                            )
-                        else:
-                            portfolio.open_position(
-                                config.QQQ_CORE_CODE, "BUY", fill_price, filled_qty,
-                                signal_strength=1.0, strategy="core_etf",
-                            )
-                            alert.trade_buy(
-                                config.QQQ_CORE_CODE, fill_price, filled_qty,
-                                sector="etf", score=None, score_label="CORE_ETF",
-                                stop_price=None,
-                                position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
-                                cash_available=portfolio.available_cash(),
-                                position_count=portfolio.position_count(),
-                                trade_id=portfolio.next_trade_id(), env=env_label,
-                            )
-                            if tracker is not None:
-                                try:
-                                    pos_after = portfolio.get_position(config.QQQ_CORE_CODE)
-                                    tracker.log_entry(
-                                        trade_id=_trade_id(config.QQQ_CORE_CODE,
-                                                           pos_after.get("entry_time")),
-                                        ticker=config.QQQ_CORE_CODE, strategy_name="core_etf",
-                                        strategy_version=config.SYSTEM_VERSION,
-                                        direction="LONG", price=fill_price, shares=filled_qty,
-                                        position_value=fill_price * filled_qty,
-                                        position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
-                                        cash=portfolio.available_cash(),
-                                        equity=portfolio.current_equity(),
-                                        timestamp=pos_after.get("entry_time"),
-                                        regime_ctx=_trade_regime_ctx(
-                                            config.QQQ_CORE_CODE, ktype, bars),
-                                        run_id=run_id, sector="etf",
-                                        market_environment=weather_code,
-                                        market="US", execution="REAL",
-                                    )
-                                except Exception as exc:
-                                    alert.log(f"trade_tracker: log_entry failed "
-                                              f"{config.QQQ_CORE_CODE} — {exc}")
-                                try:
-                                    tracker.log_market_context(
-                                        trade_id=_trade_id(
-                                            config.QQQ_CORE_CODE,
-                                            pos_after.get("entry_time")),
-                                        ctx=market_context.get_latest_context(),
-                                    )
-                                except Exception as exc:
-                                    alert.log(f"trade_tracker: log_market_context "
-                                              f"failed {config.QQQ_CORE_CODE} — {exc}")
+            # v2.11 QQQ CORE concentration control — CORE_OVERWEIGHT (>30%)
+            # and CORE_HARD_LIMIT (>35%) both pause this top-up leg (see
+            # config.py QQQ_CORE_SOFT_LIMIT_PCT docstring). This is a
+            # buy-side pause only: it never sells, and it doesn't touch the
+            # MA200 死仓 exit logic above at all. qqq_concentration is None
+            # only when broker_state fetch failed this pass, which already
+            # sets macro_block via risk_block above — so this branch is only
+            # ever reached with a real (non-None) assessment in practice;
+            # None still safely falls through to "don't skip" rather than
+            # crash if that invariant ever changes.
+            qqq_overweight = (qqq_concentration is not None
+                              and qqq_concentration.tier != portfolio_risk_manager.QQQ_TIER_NORMAL)
+            if qqq_overweight:
+                alert.log(f"runner: QQQ底仓补仓跳过 — {qqq_concentration.tier}"
+                          f"（市值占比{qqq_concentration.qqq_pct:.1%}已超过软上限"
+                          f"{config.QQQ_CORE_SOFT_LIMIT_PCT:.0%}，暂停新增买入，不触发卖出）")
+            else:
+                target_value = config.QQQ_CORE_TARGET_PCT * portfolio.total_capital()
+                shortfall    = target_value - qqq_held_value
+                qqq_price    = get_price(config.QQQ_CORE_CODE) if shortfall > 0 else 0.0
+                spend        = min(portfolio.available_cash() * 0.98, shortfall) if shortfall > 0 else 0.0
+                # v2.10 现金红线：跟2c的活跃仓位买入同一约束，不能把broker真实现金
+                # 买成负数——remaining_broker_cash为None（本轮broker取数失败）时不
+                # 加这层，risk_block已经把macro_block整体挡死。
+                if remaining_broker_cash is not None:
+                    spend = min(spend, remaining_broker_cash)
+                if qqq_price > 0 and spend > qqq_price:
+                    qty = int(spend / qqq_price)
+                    qty, pm_allowed_2d = _pm_plan_buy(
+                        pm_state, section="2D_QQQ_CORE_TOPUP", code=config.QQQ_CORE_CODE,
+                        requested_qty=qty, price=qqq_price)
+                    if qty > 0:
+                        action = "补仓" if qqq_position is not None else "买入"
+                        alert.info(f"QQQ底仓{action} {qty}股 @{qqq_price:.2f}"
+                                   f"（目标仓位{config.QQQ_CORE_TARGET_PCT:.0%}，"
+                                   f"当前{qqq_held_value / portfolio.total_capital():.1%}，"
+                                   f"站上MA{config.QQQ_MA_PERIOD}）")
+                        fill = _place_order(
+                            code=config.QQQ_CORE_CODE, side="BUY",
+                            qty=qty, price=qqq_price,
+                            trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+                        )
+                        if confirmed and fill["dealt_qty"] > 0:
+                            filled_qty = int(fill["dealt_qty"])
+                            fill_price = fill["dealt_avg_price"] or qqq_price
+                            if remaining_broker_cash is not None:
+                                remaining_broker_cash -= fill_price * filled_qty
+                            _pm_record_fill(pm_state, pm_allowed_2d, filled_qty, fill_price)
+                            if qqq_position is not None:
+                                # 补仓走pyramid同款的add_to_position——跟2b的scale-in
+                                # 一样只更新qty/avg_cost，不新开Trade Intelligence DB
+                                # 记录（那条记录的trade_id绑定在原始entry_time上）。
+                                portfolio.add_to_position(
+                                    config.QQQ_CORE_CODE, fill_price, filled_qty,
+                                    new_strength=1.0, strategy="core_etf",
+                                )
+                                alert.trade_buy(
+                                    config.QQQ_CORE_CODE, fill_price, filled_qty,
+                                    sector="etf", score=None, score_label="CORE_ETF",
+                                    stop_price=None,
+                                    position_pct=(qqq_held_value + fill_price * filled_qty) / portfolio.total_capital(),
+                                    cash_available=portfolio.available_cash(),
+                                    position_count=portfolio.position_count(),
+                                    trade_id=portfolio.next_trade_id(), env=env_label,
+                                )
+                            else:
+                                portfolio.open_position(
+                                    config.QQQ_CORE_CODE, "BUY", fill_price, filled_qty,
+                                    signal_strength=1.0, strategy="core_etf",
+                                )
+                                alert.trade_buy(
+                                    config.QQQ_CORE_CODE, fill_price, filled_qty,
+                                    sector="etf", score=None, score_label="CORE_ETF",
+                                    stop_price=None,
+                                    position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
+                                    cash_available=portfolio.available_cash(),
+                                    position_count=portfolio.position_count(),
+                                    trade_id=portfolio.next_trade_id(), env=env_label,
+                                )
+                                if tracker is not None:
+                                    try:
+                                        pos_after = portfolio.get_position(config.QQQ_CORE_CODE)
+                                        tracker.log_entry(
+                                            trade_id=_trade_id(config.QQQ_CORE_CODE,
+                                                               pos_after.get("entry_time")),
+                                            ticker=config.QQQ_CORE_CODE, strategy_name="core_etf",
+                                            strategy_version=config.SYSTEM_VERSION,
+                                            direction="LONG", price=fill_price, shares=filled_qty,
+                                            position_value=fill_price * filled_qty,
+                                            position_pct=(fill_price * filled_qty) / portfolio.total_capital(),
+                                            cash=portfolio.available_cash(),
+                                            equity=portfolio.current_equity(),
+                                            timestamp=pos_after.get("entry_time"),
+                                            regime_ctx=_trade_regime_ctx(
+                                                config.QQQ_CORE_CODE, ktype, bars),
+                                            run_id=run_id, sector="etf",
+                                            market_environment=weather_code,
+                                            market="US", execution="REAL",
+                                        )
+                                    except Exception as exc:
+                                        alert.log(f"trade_tracker: log_entry failed "
+                                                  f"{config.QQQ_CORE_CODE} — {exc}")
+                                    try:
+                                        tracker.log_market_context(
+                                            trade_id=_trade_id(
+                                                config.QQQ_CORE_CODE,
+                                                pos_after.get("entry_time")),
+                                            ctx=market_context.get_latest_context(),
+                                        )
+                                    except Exception as exc:
+                                        alert.log(f"trade_tracker: log_market_context "
+                                                  f"failed {config.QQQ_CORE_CODE} — {exc}")
         else:
             alert.log(f"runner: QQQ Beta floor skip — QQQ below MA{config.QQQ_MA_PERIOD}"
                       f"  (bear market, stay in cash)")
@@ -1009,6 +1169,78 @@ def _qqq_above_ma() -> bool:
         return float(qqq_close.iloc[-1]) > float(qqq_close.tail(config.QQQ_MA_PERIOD).mean())
     except Exception:
         return False
+
+
+@dataclass
+class _PMPassState:
+    """v2.12 Portfolio Position Manager — one instance per run_once() pass,
+    threaded through 2a/2b/2c/2d so every buy path shares the same
+    remaining_budget (mirrors the existing remaining_broker_cash pattern
+    used for the real-cash guard). Mutated only via _pm_record_fill()."""
+    enabled: bool
+    regime: str
+    budget: portfolio_position_manager.ExposureBudget
+    remaining_budget: Optional[float]   # $, broker mark-to-market; None = unconstrained
+
+
+def _pm_plan_buy(pm_state: Optional[_PMPassState], section: str, code: str,
+                  requested_qty: int, price: float) -> Tuple[int, int]:
+    """v2.12 Portfolio Position Manager gate — call right before sizing a BUY
+    is finalized (after any existing cash-based clamp), from all four buy
+    paths (2a/2b/2c/2d). Returns (applied_qty, allowed_qty):
+      allowed_qty — what PM would let through this pass, capped by
+                    pm_state.remaining_budget (never touches requested_qty
+                    when pm_state is None, i.e. is_jp_pass or broker data
+                    unavailable this pass — existing macro_block/risk_block
+                    already covers that failure mode).
+      applied_qty — allowed_qty when config.PORTFOLIO_POSITION_MANAGER_ENABLED,
+                    otherwise requested_qty unchanged (Observation Mode:
+                    real order size is provably untouched).
+    Always logs one row via portfolio_position_manager.log_attempt(),
+    regardless of the ENABLED flag — that's what makes "how much would PM
+    have blocked" answerable from the log alone in Observation Mode."""
+    if pm_state is None or requested_qty <= 0 or price <= 0:
+        return requested_qty, requested_qty
+    if pm_state.remaining_budget is None:
+        allowed_qty = requested_qty
+    else:
+        allowed_qty = max(0, min(requested_qty, int(pm_state.remaining_budget // price)))
+    applied_qty = allowed_qty if pm_state.enabled else requested_qty
+    if allowed_qty >= requested_qty:
+        action = "ALLOW"
+    elif allowed_qty <= 0:
+        action = "BLOCK"
+    else:
+        action = "REDUCE"
+    portfolio_position_manager.log_attempt(
+        section=section, code=code, regime=pm_state.regime, budget=pm_state.budget,
+        remaining_budget=pm_state.remaining_budget, requested_qty=requested_qty,
+        allowed_qty=allowed_qty, applied_qty=applied_qty, price=price,
+        action=action, enabled=pm_state.enabled,
+    )
+    return applied_qty, allowed_qty
+
+
+def _pm_record_fill(pm_state: Optional[_PMPassState], allowed_qty: int,
+                     dealt_qty: int, fill_price: float) -> None:
+    """Decrements pm_state.remaining_budget by the market-value delta of
+    this fill — exact, not an approximation: a BUY of `used_qty` shares at
+    `fill_price` increases long_mv by exactly `used_qty * fill_price` at the
+    instant of the trade regardless of commission (commission comes out of
+    cash, never out of position market value) and regardless of whether this
+    is a brand-new position or an add-to-existing one (both cases increase
+    long_mv by the same formula). Capped at min(allowed_qty, dealt_qty) so
+    Observation Mode's shadow budget only ever decreases by what a real,
+    PM-enforced run would actually have bought this pass — not by whatever
+    size the (uncapped, since ENABLED=False) real order happened to fill
+    at — which is what makes the log's running remaining_capacity a faithful
+    simulation of "if PM had been live" rather than drifting further negative
+    than a real enforced run ever would."""
+    if pm_state is None or pm_state.remaining_budget is None:
+        return
+    used_qty = min(allowed_qty, dealt_qty)
+    if used_qty > 0:
+        pm_state.remaining_budget -= used_qty * fill_price
 
 
 def _day_ordinal(entry_time_iso) -> int:
@@ -1163,6 +1395,17 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_exit failed {order.code} — {exc}")
+                try:
+                    # v2.9.x Exit Diagnostics — observation only, see
+                    # engine/exit_diagnostics.py's module docstring.
+                    code_norm = normalize_exit_reason(order.reason)
+                    tracker.log_exit_diagnostics(
+                        trade_id=_trade_id(order.code, closed.get("entry_time")),
+                        stop_loss_triggered=(code_norm == EXIT_STOP_LOSS),
+                        strategy_exit_triggered=(code_norm == EXIT_STRATEGY_SIGNAL),
+                    )
+                except Exception as exc:
+                    alert.log(f"trade_tracker: log_exit_diagnostics failed {order.code} — {exc}")
             executed_orders.append({"code": order.code, "sell_qty": dealt_qty,
                                     "price": exit_price, "reason": order.reason})
             if dealt_qty < sell_qty:
@@ -1184,6 +1427,137 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
                 alert.error("再平衡结束后仓位仍处于EMERGENCY，需要人工介入检查")
         except Exception as exc:
             alert.error(f"再平衡后验证查询失败 — {exc}")
+    finally:
+        if lock_state == portfolio_risk_manager.LOCK_ACQUIRED:
+            portfolio_risk_manager.release_rebalance_lock()
+
+    return executed_orders
+
+
+def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed: bool,
+                       ktype: str, bars: int, broker_state: BrokerState,
+                       tracker: Optional[TradeTracker] = None) -> List[dict]:
+    """v2.11 QQQ CORE concentration hard-limit trim (Layer 1) — see config.py
+    QQQ_CORE_SOFT_LIMIT_PCT/QQQ_CORE_HARD_LIMIT_PCT/QQQ_CORE_TRIM_TARGET_PCT
+    docstring and risk/portfolio_risk_manager.py's evaluate_qqq_concentration()/
+    plan_qqq_core_trim(). Only called by the caller above when QQQ alone (not
+    total portfolio exposure) has drifted past QQQ_CORE_HARD_LIMIT_PCT of
+    broker total_assets — completely independent of _run_emergency_rebalance()
+    above (that one only runs when total exposure > 105% and trims QQQ all the
+    way to the 25% floor; this one trims only to the gentler ~30-32% target).
+
+    confirmed=False (default until config.QQQ_CORE_TRIM_AUTO_EXECUTE is turned
+    on by hand — same deployment-safety pattern as config.
+    PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE) — preview only: replans off the
+    `broker_state` the caller already fetched this pass (the same snapshot
+    behind the qqq_concentration classification logged alongside it), no
+    extra live fetch. A second independent fetch here would open a window
+    where the previewed trim size and the logged weight/tier could disagree
+    if price ticked between the two calls — reusing the caller's snapshot
+    removes that risk entirely for the mode that's actually active while
+    AUTO_EXECUTE is off (i.e., today). Single _place_order(confirmed=False)
+    call, never touches state.
+
+    confirmed=True — deliberately ignores the passed-in snapshot and
+    re-fetches broker state fresh, re-verifies the hard-limit condition still
+    holds, then executes exactly one SELL order (this is a slow concentration
+    drift, not an urgent multi-leg unwind like EMERGENCY, so one trim per
+    pass is enough) under the same rebalance lock _run_emergency_rebalance()
+    uses, so the two paths never overlap on the same QQQ position. A real
+    sell must never fire off a snapshot that could be stale by the time
+    AUTO_EXECUTE was flipped on, so this path re-verifies right before
+    trading rather than trusting the pass-level snapshot (mirrors
+    _run_emergency_rebalance()'s own re-fetch-per-leg pattern). Books the
+    REAL dealt_qty into tracker.py.
+
+    Returns the list of {"code","sell_qty","price","reason"} dicts actually
+    executed (or, in preview mode, that WOULD be executed).
+    """
+    if not confirmed:
+        plan = portfolio_risk_manager.plan_qqq_core_trim(broker_state)
+        if not plan:
+            portfolio_risk_manager.check_qqq_trim_preview_repeat(None)
+            return []
+        order = plan[0]
+        preview_msg = (f"[预览] QQQ CORE HARD LIMIT 将卖出 {order.code} {order.sell_qty}股 "
+                       f"@{order.price:.4f}（{order.reason}，温和回落至约"
+                       f"{config.QQQ_CORE_TRIM_TARGET_PCT:.0%}）")
+        # 2026-09-15: sell_qty本身逐轮受价格取整噪声影响会跳动±1~2股（哪怕QQQ
+        # 真实占比几乎没变），不加区分会导致手机每~5分钟收到一条几乎重复的
+        # 推送——跟上次实际推送过的sell_qty比较，变化够大才再推，否则降级成
+        # 只写日志/控制台（见risk/portfolio_risk_manager.py::
+        # check_qqq_trim_preview_repeat() docstring）。
+        if portfolio_risk_manager.check_qqq_trim_preview_repeat(order.sell_qty):
+            alert.info(preview_msg)
+        else:
+            alert.log(preview_msg + "（较上次推送变化不大，本轮不重复推送）")
+        _place_order(code=order.code, side="SELL", qty=order.sell_qty, price=order.price,
+                    trd_env=trd_env, env_label=env_label, confirmed=False)
+        return [{"code": order.code, "sell_qty": order.sell_qty,
+                 "price": order.price, "reason": order.reason}]
+
+    lock_state = portfolio_risk_manager.try_acquire_rebalance_lock()
+    if lock_state == portfolio_risk_manager.LOCK_STALE:
+        alert.error("QQQ CORE trim：发现一个超时未释放的执行锁（可能是上次执行崩溃/卡死），"
+                    r"为避免掩盖异常状态不会自动清除——需要人工确认账户真实状态后"
+                    r"手动删除 C:\KabuData\portfolio\rebalance_lock.json 才会继续")
+        return []
+    if lock_state == portfolio_risk_manager.LOCK_ACTIVE:
+        alert.warn("QQQ CORE trim：已有一次再平衡执行正在进行中（或锁文件无法读取），本轮跳过")
+        return []
+
+    executed_orders: List[dict] = []
+    try:
+        bs2 = broker_state_mod.fetch_broker_state(trd_env)
+        replan = portfolio_risk_manager.plan_qqq_core_trim(bs2)
+        if not replan:
+            alert.log("QQQ CORE trim：重新查询后已不满足hard limit条件，本轮跳过")
+            return []
+        order = replan[0]
+        bpos = bs2.positions.get(order.code)
+        broker_qty = int(bpos.qty) if bpos is not None else 0
+        sell_qty = min(order.sell_qty, broker_qty)   # never oversell vs. just-refetched real qty
+        if sell_qty <= 0:
+            alert.error(f"QQQ CORE trim：{order.code}计划卖出但broker真实股数为{broker_qty}，停止")
+            return []
+
+        alert.info(f"QQQ CORE trim 卖出 {order.code} {sell_qty}股 @{order.price:.4f}（{order.reason}）")
+        fill = _place_order(code=order.code, side="SELL", qty=sell_qty, price=order.price,
+                            trd_env=trd_env, env_label=env_label, confirmed=True)
+        if fill["dealt_qty"] <= 0:
+            alert.error(f"QQQ CORE trim：{order.code}未成交（{fill['status']}），停止")
+            return []
+
+        dealt_qty  = int(fill["dealt_qty"])
+        exit_price = fill["dealt_avg_price"] or order.price
+        closed = portfolio.reduce_position(order.code, exit_price, dealt_qty, reason=order.reason)
+        alert.trade_sell(
+            order.code, closed.get("avg_cost", exit_price), exit_price, dealt_qty,
+            days_held=_days_held(closed.get("entry_time")), reason=order.reason,
+            cash_available=portfolio.available_cash(), total_equity=portfolio.current_equity(),
+            position_count=portfolio.position_count(), trade_id=portfolio.next_trade_id(), env=env_label,
+        )
+        if tracker is not None:
+            try:
+                tracker.log_exit(
+                    trade_id=_trade_id(order.code, closed.get("entry_time")),
+                    price=exit_price, cash=portfolio.available_cash(),
+                    equity=portfolio.current_equity(), timestamp=datetime.now().isoformat(),
+                    exit_reason=order.reason, regime_ctx=_trade_regime_ctx(order.code, ktype, bars),
+                )
+            except Exception as exc:
+                alert.log(f"trade_tracker: log_exit failed {order.code} — {exc}")
+            try:
+                code_norm = normalize_exit_reason(order.reason)
+                tracker.log_exit_diagnostics(
+                    trade_id=_trade_id(order.code, closed.get("entry_time")),
+                    stop_loss_triggered=(code_norm == EXIT_STOP_LOSS),
+                    strategy_exit_triggered=(code_norm == EXIT_STRATEGY_SIGNAL),
+                )
+            except Exception as exc:
+                alert.log(f"trade_tracker: log_exit_diagnostics failed {order.code} — {exc}")
+        executed_orders.append({"code": order.code, "sell_qty": dealt_qty,
+                                "price": exit_price, "reason": order.reason})
     finally:
         if lock_state == portfolio_risk_manager.LOCK_ACQUIRED:
             portfolio_risk_manager.release_rebalance_lock()
@@ -1276,6 +1650,17 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
                 )
             except Exception as exc:
                 alert.log(f"trade_tracker: log_exit failed {victim_code} — {exc}")
+            try:
+                # v2.9.x Exit Diagnostics — observation only, see
+                # engine/exit_diagnostics.py's module docstring.
+                code_norm = normalize_exit_reason("ACTIVE_REPLACEMENT")
+                tracker.log_exit_diagnostics(
+                    trade_id=_trade_id(victim_code, closed.get("entry_time")),
+                    stop_loss_triggered=(code_norm == EXIT_STOP_LOSS),
+                    strategy_exit_triggered=(code_norm == EXIT_STRATEGY_SIGNAL),
+                )
+            except Exception as exc:
+                alert.log(f"trade_tracker: log_exit_diagnostics failed {victim_code} — {exc}")
     return victim_code
 
 

@@ -66,7 +66,14 @@ def _emit(level: str, msg: str) -> None:
 def _is_muted() -> bool:
     """True while config.NOTIFY_MUTE_FILE exists — checked fresh on every
     push so a running process can be paused/resumed by touching/deleting the
-    file, no restart needed."""
+    file, no restart needed. Also true whenever unittest is loaded: every
+    test_*.py in this repo imports unittest and no production entry point
+    (main.py/runner.py/watchdog.py) does, so "unittest in sys.modules" is a
+    reliable "we're in a test run" signal — test suites exercise real
+    alert.warn/error/trade_buy/trade_sell call sites with fake data and would
+    otherwise push a phone notification for every test, every run."""
+    if "unittest" in sys.modules:
+        return True
     mute_file = getattr(config, "NOTIFY_MUTE_FILE", "")
     return bool(mute_file) and Path(mute_file).exists()
 
@@ -152,6 +159,23 @@ def warn_skip(code: str, msg: str) -> None:
     if _skip_pushed_today.get(code) == today:
         return
     _skip_pushed_today[code] = today
+    _push_all(msg, prefix="")
+
+
+_state_pushed_today: dict = {}  # key -> "YYYY-MM-DD" of last push
+
+
+def warn_state(key: str, msg: str) -> None:
+    """Like warn(), but pushed to DingTalk/Telegram at most once per calendar
+    day per key — for a persistent state condition (e.g. portfolio risk tier
+    staying at PAUSE_NEW all day) that would otherwise repush every
+    --interval scan (e.g. every 5 minutes) while the state is unchanged."""
+    print(f"[{_ts()}] [WARN ] {msg}")
+    _logger.warning(msg)
+    today = datetime.now().strftime("%Y-%m-%d")
+    if _state_pushed_today.get(key) == today:
+        return
+    _state_pushed_today[key] = today
     _push_all(msg, prefix="")
 
 

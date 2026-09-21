@@ -67,6 +67,17 @@ class TestEvaluate(unittest.TestCase):
         a = prm.evaluate(bs)
         self.assertEqual(a.tier, prm.TIER_UNKNOWN)
 
+    def test_104pct_is_warning_not_emergency(self):
+        bs = _bstate({}, cash=-40_000, total_assets=1_000_000, long_mv=1_040_000)
+        a = prm.evaluate(bs)
+        self.assertEqual(a.tier, prm.TIER_WARNING)
+
+    def test_105pct_boundary_is_warning_not_emergency(self):
+        bs = _bstate({}, cash=-50_000, total_assets=1_000_000, long_mv=1_050_000)
+        a = prm.evaluate(bs)
+        self.assertEqual(a.tier, prm.TIER_WARNING,
+                         "exactly 105% must stay WARNING -- EMERGENCY requires strictly above it")
+
 
 class TestReconcile(unittest.TestCase):
 
@@ -272,6 +283,265 @@ class TestPlanRebalance(unittest.TestCase):
             self.assertGreaterEqual(order.sell_qty * order.price, config.PORTFOLIO_REBALANCE_MIN_TRADE_USD)
 
 
+class TestEvaluateQQQConcentration(unittest.TestCase):
+    """v2.11 QQQ CORE concentration control (Layer 1) -- see config.py
+    QQQ_CORE_SOFT_LIMIT_PCT/QQQ_CORE_HARD_LIMIT_PCT docstring. Deliberately
+    independent of TestEvaluate above (Layer 2, total exposure): a
+    QQQ-only book makes qqq_pct == exposure_pct, which is fine for the
+    tier-boundary tests here, but the two independence tests at the bottom
+    pad long_mv with other holdings specifically to prove the two layers
+    don't leak into each other."""
+
+    def _qqq_state(self, qqq_pct, total_assets=1_000_000.0, price=700.0, other_value=0.0):
+        qqq_value = qqq_pct * total_assets
+        qty = qqq_value / price
+        positions = {config.QQQ_CORE_CODE: _bpos(config.QQQ_CORE_CODE, qty, price, qqq_value, price)}
+        long_mv = qqq_value + other_value
+        return _bstate(positions, cash=total_assets - long_mv, total_assets=total_assets, long_mv=long_mv)
+
+    def test_25pct_is_normal(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.25))
+        self.assertEqual(a.tier, prm.QQQ_TIER_NORMAL)
+
+    def test_28pct_is_normal(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.28))
+        self.assertEqual(a.tier, prm.QQQ_TIER_NORMAL)
+
+    def test_30pct_boundary_is_still_normal(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.30))
+        self.assertEqual(a.tier, prm.QQQ_TIER_NORMAL)
+
+    def test_32pct_is_overweight(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.32))
+        self.assertEqual(a.tier, prm.QQQ_TIER_OVERWEIGHT)
+
+    def test_35pct_boundary_is_still_overweight_not_hard_limit(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.35))
+        self.assertEqual(a.tier, prm.QQQ_TIER_OVERWEIGHT,
+                         "exactly at the 35% line must not yet be HARD_LIMIT -- a razor-thin "
+                         "breach should not be treated the same as a real overshoot")
+
+    def test_35_3pct_is_hard_limit(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.353))
+        self.assertEqual(a.tier, prm.QQQ_TIER_HARD_LIMIT)
+
+    def test_37pct_is_hard_limit(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.37))
+        self.assertEqual(a.tier, prm.QQQ_TIER_HARD_LIMIT)
+
+    def test_40pct_is_hard_limit(self):
+        a = prm.evaluate_qqq_concentration(self._qqq_state(0.40))
+        self.assertEqual(a.tier, prm.QQQ_TIER_HARD_LIMIT)
+
+    def test_unknown_on_missing_state(self):
+        a = prm.evaluate_qqq_concentration(None)
+        self.assertEqual(a.tier, prm.TIER_UNKNOWN)
+        self.assertIsNone(a.qqq_pct)
+
+    def test_independent_of_total_exposure_qqq_high_exposure_normal(self):
+        # QQQ alone is past its own hard limit but other holdings are small
+        # enough that total portfolio exposure stays comfortably under
+        # 105% -- Layer 1 and Layer 2 must classify independently.
+        bs = self._qqq_state(0.40, total_assets=1_000_000.0, other_value=200_000.0)  # exposure = 60%
+        self.assertEqual(prm.evaluate_qqq_concentration(bs).tier, prm.QQQ_TIER_HARD_LIMIT)
+        self.assertEqual(prm.evaluate(bs).tier, prm.TIER_NORMAL)
+
+    def test_independent_of_total_exposure_qqq_normal_exposure_emergency(self):
+        # QQQ itself is well inside its own limits but other holdings push
+        # total exposure past 105% -- EMERGENCY must still fire regardless
+        # of QQQ's own concentration tier.
+        bs = self._qqq_state(0.20, total_assets=1_000_000.0, other_value=900_000.0)  # exposure = 110%
+        self.assertEqual(prm.evaluate_qqq_concentration(bs).tier, prm.QQQ_TIER_NORMAL)
+        self.assertEqual(prm.evaluate(bs).tier, prm.TIER_EMERGENCY)
+
+
+class TestPlanQQQCoreTrim(unittest.TestCase):
+
+    def _qqq_state(self, qqq_pct, total_assets=1_000_000.0, price=700.0):
+        qqq_value = qqq_pct * total_assets
+        qty = qqq_value / price
+        positions = {config.QQQ_CORE_CODE: _bpos(config.QQQ_CORE_CODE, qty, price, qqq_value, price)}
+        return _bstate(positions, cash=total_assets - qqq_value, total_assets=total_assets, long_mv=qqq_value)
+
+    def test_no_trim_at_25pct(self):
+        self.assertEqual(prm.plan_qqq_core_trim(self._qqq_state(0.25)), [])
+
+    def test_no_trim_at_30pct(self):
+        self.assertEqual(prm.plan_qqq_core_trim(self._qqq_state(0.30)), [])
+
+    def test_no_trim_at_32pct_overweight(self):
+        self.assertEqual(prm.plan_qqq_core_trim(self._qqq_state(0.32)), [])
+
+    def test_no_trim_exactly_at_35pct_boundary(self):
+        self.assertEqual(prm.plan_qqq_core_trim(self._qqq_state(0.35)), [],
+                         "a razor-thin 35.0% breach must not trigger an oversized trim")
+
+    def test_no_trim_at_35_3pct_stays_pure_classification_only(self):
+        # plan_qqq_core_trim() itself is a sizing function and will size a
+        # real trim once past the hard limit (35.3% qualifies) -- the actual
+        # "don't touch anything right after deployment" protection lives at
+        # the caller in engine/runner.py via config.QQQ_CORE_TRIM_AUTO_EXECUTE
+        # (see engine/test_portfolio_risk_manager_gate.py), not here. This
+        # test just documents that boundary.
+        plan = prm.plan_qqq_core_trim(self._qqq_state(0.353))
+        self.assertTrue(plan, "35.3% is past the hard limit, so a plan IS computed here -- "
+                              "execution safety is a caller-side concern")
+
+    def test_trim_fires_above_35pct(self):
+        plan = prm.plan_qqq_core_trim(self._qqq_state(0.37))
+        self.assertTrue(plan, "expected a trim order past the hard limit")
+        self.assertEqual(plan[0].reason, "QQQ_CORE_HARD_LIMIT_TRIM")
+
+    def test_trim_targets_gentle_32pct_not_25pct_floor(self):
+        bs = self._qqq_state(0.40)
+        plan = prm.plan_qqq_core_trim(bs)
+        self.assertTrue(plan)
+        qqq_pos = bs.positions[config.QQQ_CORE_CODE]
+        remaining_value = (qqq_pos.qty - plan[0].sell_qty) * qqq_pos.current_price
+        trim_target_value = config.QQQ_CORE_TRIM_TARGET_PCT * bs.total_assets
+        floor_value = config.QQQ_CORE_TARGET_PCT * bs.total_assets
+        self.assertGreaterEqual(remaining_value, trim_target_value - qqq_pos.current_price,
+                                "must not overshoot past the ~32% trim target")
+        self.assertGreater(remaining_value, floor_value,
+                           "must NOT snap all the way back down to the 25% strategic floor")
+
+    def test_min_trade_size_skips_tiny_excess(self):
+        # total_assets small enough that even a hard-limit breach's excess
+        # over the 32% trim target falls below PORTFOLIO_REBALANCE_MIN_TRADE_USD.
+        bs = self._qqq_state(0.351, total_assets=20_000.0)
+        self.assertEqual(prm.plan_qqq_core_trim(bs), [])
+
+    def test_no_trim_on_unknown_state(self):
+        self.assertEqual(prm.plan_qqq_core_trim(None), [])
+
+    def test_trim_size_scales_with_overshoot_and_35_01pct_is_small(self):
+        # v2.11.1 audit: trim USD must grow as the overshoot past the hard
+        # limit grows, and a razor-thin 35.01% breach must produce a SMALL
+        # trim relative to the position -- not some fixed/runaway amount.
+        pcts = [0.3501, 0.351, 0.353, 0.36, 0.37, 0.40, 0.50]
+        trim_fractions = []
+        for pct in pcts:
+            bs = self._qqq_state(pct, total_assets=10_000_000.0)  # large enough
+            # that even the smallest overshoot clears PORTFOLIO_REBALANCE_MIN_TRADE_USD
+            plan = prm.plan_qqq_core_trim(bs)
+            self.assertTrue(plan, f"expected a trim plan at {pct:.4%}")
+            qqq_pos = bs.positions[config.QQQ_CORE_CODE]
+            trim_fractions.append(plan[0].sell_qty / qqq_pos.qty)
+
+        self.assertEqual(trim_fractions, sorted(trim_fractions),
+                         "trim fraction of the QQQ position must increase monotonically "
+                         "with how far past the hard limit QQQ has drifted")
+        self.assertLess(trim_fractions[0], 0.10,
+                        "35.01% (a razor-thin breach) must trim only a small sliver "
+                        "of the position, not an abnormally large sell")
+        self.assertGreater(trim_fractions[-1], trim_fractions[0] * 3,
+                           "50% overweight must trim proportionally much more than 35.01%")
+
+    def test_post_trim_weight_lands_close_to_32pct_within_share_rounding(self):
+        # Allow normal integer-share/price rounding error but the estimated
+        # post-trim weight must not drift meaningfully away from the
+        # configured ~32% trim target across a range of overshoot sizes.
+        for pct in (0.3501, 0.36, 0.37, 0.40, 0.50):
+            bs = self._qqq_state(pct, total_assets=1_000_000.0, price=700.0)
+            plan = prm.plan_qqq_core_trim(bs)
+            self.assertTrue(plan)
+            qqq_pos = bs.positions[config.QQQ_CORE_CODE]
+            remaining_value = (qqq_pos.qty - plan[0].sell_qty) * qqq_pos.current_price
+            post_trim_pct = remaining_value / bs.total_assets
+            self.assertAlmostEqual(post_trim_pct, config.QQQ_CORE_TRIM_TARGET_PCT, delta=0.005,
+                                   msg=f"post-trim weight at {pct:.4%} drifted too far from "
+                                       f"the ~32% target (one share's worth of rounding is "
+                                       f"expected, a whole percentage point is not)")
+
+
+class TestLogQQQSnapshot(unittest.TestCase):
+    """v2.11.1 audit: log_qqq_snapshot() persists the fields needed to
+    answer 'would this have traded, for how much, to what estimated
+    resulting weight' without needing AUTO_EXECUTE on -- see engine/
+    runner.py's call site right after evaluate_qqq_concentration()."""
+
+    def setUp(self):
+        self._path = prm._QQQ_RISK_LOG_PATH
+        self._had_backup = self._path.exists()
+        if self._had_backup:
+            self._backup = self._path.read_text(encoding="utf-8")
+        self._path.unlink(missing_ok=True)
+
+    def tearDown(self):
+        self._path.unlink(missing_ok=True)
+        if self._had_backup:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.write_text(self._backup, encoding="utf-8")
+
+    def _last_row(self):
+        import json
+        lines = self._path.read_text(encoding="utf-8").strip().splitlines()
+        return json.loads(lines[-1])
+
+    def test_hard_limit_with_plan_records_trim_and_post_trim_weight(self):
+        bs = _bstate({config.QQQ_CORE_CODE: _bpos(config.QQQ_CORE_CODE, 529, 700.0, 370_300.0, 700.0)},
+                     cash=629_700.0, total_assets=1_000_000.0, long_mv=370_300.0)
+        assessment = prm.evaluate_qqq_concentration(bs)
+        plan = prm.plan_qqq_core_trim(bs)
+        prm.log_qqq_snapshot(assessment, plan, executed_orders=[], skip_reason=None)
+
+        row = self._last_row()
+        self.assertEqual(row["tier"], prm.QQQ_TIER_HARD_LIMIT)
+        self.assertAlmostEqual(row["qqq_weight_pct"], 0.3703, places=4)
+        self.assertEqual(row["qqq_shares"], 529)
+        self.assertEqual(row["hard_limit_pct"], config.QQQ_CORE_HARD_LIMIT_PCT)
+        self.assertEqual(row["trim_target_pct"], config.QQQ_CORE_TRIM_TARGET_PCT)
+        self.assertEqual(row["trim_shares"], plan[0].sell_qty)
+        self.assertAlmostEqual(row["trim_usd"], plan[0].sell_qty * plan[0].price, places=2)
+        self.assertAlmostEqual(row["estimated_post_trim_weight_pct"],
+                               config.QQQ_CORE_TRIM_TARGET_PCT, delta=0.005)
+        self.assertFalse(row["executed"])
+        self.assertIsNone(row["skip_reason"])
+
+    def test_hard_limit_with_empty_plan_infers_below_min_trade_size(self):
+        bs = self._small_hard_limit_state()
+        assessment = prm.evaluate_qqq_concentration(bs)
+        plan = prm.plan_qqq_core_trim(bs)
+        self.assertEqual(plan, [], "fixture must exercise the min-trade-size skip path")
+        prm.log_qqq_snapshot(assessment, plan, executed_orders=[], skip_reason=None)
+
+        row = self._last_row()
+        self.assertEqual(row["skip_reason"], "BELOW_MIN_TRADE_SIZE")
+        self.assertIsNone(row["trim_usd"])
+
+    def test_emergency_active_skip_reason_is_not_overridden(self):
+        bs = _bstate({config.QQQ_CORE_CODE: _bpos(config.QQQ_CORE_CODE, 473, 716.0, 342_087.79, 723.23)},
+                     cash=-50_000.0, total_assets=280_000.0, long_mv=342_087.79)
+        assessment = prm.evaluate_qqq_concentration(bs)
+        plan = prm.plan_qqq_core_trim(bs)
+        self.assertTrue(plan, "fixture must be past the hard limit for this to be meaningful")
+        prm.log_qqq_snapshot(assessment, plan, executed_orders=[], skip_reason="EMERGENCY_ACTIVE")
+
+        row = self._last_row()
+        self.assertEqual(row["skip_reason"], "EMERGENCY_ACTIVE")
+
+    def test_normal_tier_records_no_trim_fields(self):
+        bs = _bstate({config.QQQ_CORE_CODE: _bpos(config.QQQ_CORE_CODE, 350, 700.0, 245_000.0, 700.0)},
+                     cash=755_000.0, total_assets=1_000_000.0, long_mv=245_000.0)
+        assessment = prm.evaluate_qqq_concentration(bs)
+        plan = prm.plan_qqq_core_trim(bs)
+        prm.log_qqq_snapshot(assessment, plan, executed_orders=[], skip_reason=None)
+
+        row = self._last_row()
+        self.assertEqual(row["tier"], prm.QQQ_TIER_NORMAL)
+        self.assertIsNone(row["trim_usd"])
+        self.assertIsNone(row["skip_reason"])
+        self.assertFalse(row["executed"])
+
+    def _small_hard_limit_state(self):
+        total_assets = 20_000.0
+        qqq_value = 0.351 * total_assets
+        price = 700.0
+        qty = qqq_value / price
+        return _bstate({config.QQQ_CORE_CODE: _bpos(config.QQQ_CORE_CODE, qty, price, qqq_value, price)},
+                        cash=total_assets - qqq_value, total_assets=total_assets, long_mv=qqq_value)
+
+
 class TestReconciliationDiffGrowth(unittest.TestCase):
 
     def setUp(self):
@@ -301,6 +571,60 @@ class TestReconciliationDiffGrowth(unittest.TestCase):
         prm.check_and_update_diff_growth([prm.ReconciliationDiff("US.QQQ", 473, 349, 124)])
         grew = prm.check_and_update_diff_growth([prm.ReconciliationDiff("US.QQQ", 460, 349, 111)])
         self.assertFalse(grew.get("US.QQQ"))
+
+
+class TestQQQTrimPreviewRepeat(unittest.TestCase):
+    """v2.11.2 (2026-09-15) — the [预览] push de-dup that stops sell_qty's
+    own price-rounding noise (46/48/47 shares three passes in a row was the
+    reported symptom) from pushing a near-identical DingTalk/Telegram
+    message every ~5 minutes."""
+
+    def setUp(self):
+        self._path = prm._QQQ_TRIM_PREVIEW_PATH
+        self._had_backup = self._path.exists()
+        if self._had_backup:
+            self._backup = self._path.read_text(encoding="utf-8")
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.unlink(missing_ok=True)
+        self._threshold = config.QQQ_CORE_TRIM_PREVIEW_ALERT_CHANGE_SHARES
+
+    def tearDown(self):
+        self._path.unlink(missing_ok=True)
+        if self._had_backup:
+            self._path.write_text(self._backup, encoding="utf-8")
+
+    def test_first_observation_alerts(self):
+        self.assertTrue(prm.check_qqq_trim_preview_repeat(46))
+
+    def test_small_noise_within_threshold_does_not_repeat(self):
+        prm.check_qqq_trim_preview_repeat(46)
+        self.assertFalse(prm.check_qqq_trim_preview_repeat(46 + self._threshold - 1))
+
+    def test_change_at_or_above_threshold_repeats(self):
+        prm.check_qqq_trim_preview_repeat(46)
+        self.assertTrue(prm.check_qqq_trim_preview_repeat(46 + self._threshold))
+
+    def test_compares_against_last_pushed_value_not_last_pass(self):
+        prm.check_qqq_trim_preview_repeat(46)   # pushed -> baseline=46
+        # Each subsequent step is individually < threshold vs the PREVIOUS
+        # pass, but a per-pass comparison would drift the baseline forward
+        # and never re-alert -- this asserts the comparison stays anchored
+        # to the last PUSHED value (46), not the last-seen pass.
+        small_step = max(1, self._threshold - 1)
+        self.assertFalse(prm.check_qqq_trim_preview_repeat(46 + small_step))
+        self.assertTrue(prm.check_qqq_trim_preview_repeat(46 + self._threshold))
+
+    def test_none_clears_baseline_for_a_fresh_re_entry(self):
+        prm.check_qqq_trim_preview_repeat(46)
+        prm.check_qqq_trim_preview_repeat(None)   # tier fell back below hard limit
+        # A fresh CORE_HARD_LIMIT episode alerts immediately even at a value
+        # close to the old baseline -- it must not compare against a stale
+        # number left over from an unrelated, already-ended episode.
+        self.assertTrue(prm.check_qqq_trim_preview_repeat(47))
+
+    def test_none_with_no_prior_state_is_a_safe_no_op(self):
+        self.assertFalse(prm.check_qqq_trim_preview_repeat(None))
+        self.assertFalse(self._path.exists())
 
 
 class TestRebalanceLock(unittest.TestCase):

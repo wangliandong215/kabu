@@ -261,6 +261,29 @@ CREATE TABLE IF NOT EXISTS trade_entry_quality (
 -- than silently overwriting. Nothing in this codebase reads these columns
 -- to gate/scale a BUY/SELL — same observation-only contract as
 -- trade_market_context/trade_entry_quality above.
+-- v2.9.x — Exit Diagnostics (see engine/exit_diagnostics.py). One row per
+-- trade, OBSERVATION ONLY: nothing in this codebase reads these columns to
+-- gate/scale a BUY/SELL/exit — built out of the 2026-09 loss-attribution
+-- investigation to separate "trade never really worked" (EARLY_FAILURE)
+-- from "real trend winner gave back part of its gain" (PROFIT_GIVEBACK /
+-- EXTREME_GIVEBACK), both of which were previously indistinguishable under
+-- the single STRATEGY_EXIT(atr_breakout) exit_reason label.
+-- mfe/mae/pnl/position_value/holding_days/exit_reason_code are deliberately
+-- NOT duplicated here — they already exist on trades.mfe/mae/pnl/
+-- position_value/holding_days/exit_reason_code; query_exit_diagnostics()
+-- joins them in rather than this table re-declaring them.
+CREATE TABLE IF NOT EXISTS trade_exit_diagnostics (
+    trade_id                TEXT PRIMARY KEY REFERENCES trades(trade_id),
+    exit_category            TEXT,
+    mfe_pct                  REAL,
+    mae_pct                  REAL,
+    giveback_pct             REAL,
+    mfe_capture              REAL,
+    stop_loss_triggered      INTEGER,
+    strategy_exit_triggered  INTEGER,
+    recorded_at              TEXT
+);
+
 CREATE TABLE IF NOT EXISTS trade_research_snapshot (
     trade_id               TEXT PRIMARY KEY REFERENCES trades(trade_id),
     signal_time             TEXT,
@@ -708,6 +731,70 @@ class TradeTracker:
             FROM trade_entry_quality q
             JOIN trades t ON t.trade_id = q.trade_id
             LEFT JOIN trade_attribution a ON a.trade_id = q.trade_id
+        """
+        return pd.read_sql_query(query, self._conn)
+
+    def log_exit_diagnostics(self, trade_id: str,
+                              stop_loss_triggered: Optional[bool] = None,
+                              strategy_exit_triggered: Optional[bool] = None,
+                              timestamp: Optional[str] = None) -> None:
+        """v2.9.x Exit Diagnostics — see engine/exit_diagnostics.py's module
+        docstring for the observation-only contract and category
+        definitions. Must be called AFTER log_exit() for the same trade_id
+        (reads mfe/mae/pnl/position_value/holding_days back off the trades
+        row log_exit() just wrote); a trade_id with no exit_time yet is a
+        silent no-op, matching update_position_metrics()'s
+        never-raise-on-a-lookup-miss convention — callers wrap this in
+        try/except regardless, same as every other tracker hook.
+        INSERT OR REPLACE for the same idempotency reason as
+        log_entry_quality()."""
+        from engine.exit_diagnostics import classify_exit
+        ts = timestamp or datetime.now().isoformat()
+        with _write_lock:
+            row = self._conn.execute(
+                "SELECT mfe, mae, pnl, position_value, holding_days "
+                "FROM trades WHERE trade_id=? AND exit_time IS NOT NULL",
+                (trade_id,),
+            ).fetchone()
+            if row is None:
+                return
+            result = classify_exit(
+                mfe=row["mfe"], mae=row["mae"], pnl=row["pnl"],
+                position_value=row["position_value"],
+                holding_days=row["holding_days"],
+                stop_loss_triggered=stop_loss_triggered,
+                strategy_exit_triggered=strategy_exit_triggered,
+            )
+            if result is None:
+                return
+            self._conn.execute(
+                """INSERT OR REPLACE INTO trade_exit_diagnostics (
+                    trade_id, exit_category, mfe_pct, mae_pct, giveback_pct,
+                    mfe_capture, stop_loss_triggered, strategy_exit_triggered,
+                    recorded_at
+                ) VALUES (?,?,?,?,?,?,?,?,?)""",
+                (trade_id, result["exit_category"], result["mfe_pct"],
+                 result["mae_pct"], result["giveback_pct"], result["mfe_capture"],
+                 stop_loss_triggered, strategy_exit_triggered, ts),
+            )
+            self._conn.commit()
+
+    def query_exit_diagnostics(self) -> pd.DataFrame:
+        """v2.9.x — one row per trade_exit_diagnostics row, joined against
+        the trades columns it deliberately doesn't duplicate (see
+        trade_exit_diagnostics's schema comment). Used by
+        analyze_exit_diagnostics.py; not called from any trading path."""
+        query = """
+            SELECT
+                t.trade_id, t.ticker AS symbol, t.entry_time, t.exit_time,
+                t.holding_days, t.pnl, t.pnl_pct, t.mfe, t.mae,
+                t.position_value, t.exit_reason, t.exit_reason_code,
+                t.strategy_name,
+                d.exit_category, d.mfe_pct, d.mae_pct, d.giveback_pct,
+                d.mfe_capture, d.stop_loss_triggered, d.strategy_exit_triggered,
+                d.recorded_at
+            FROM trade_exit_diagnostics d
+            JOIN trades t ON t.trade_id = d.trade_id
         """
         return pd.read_sql_query(query, self._conn)
 
