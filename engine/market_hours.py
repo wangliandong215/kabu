@@ -330,13 +330,25 @@ def just_closed(minutes_after: int = 5, now: datetime = None) -> bool:
     ~20min, long enough to miss a fixed-width window entirely). The close
     check lands on the JST morning *after* the session opened, so the
     trading-day check is against `now.date() - 1 day` (the US day the
-    session opened on), not `now.date()` itself."""
+    session opened on), not `now.date()` itself.
+
+    `now >= today's close_t` is true for most of the JST day (close_t is
+    early morning, the next open is that evening), so a process restart
+    during that whole stretch — including mid-session, after the next
+    day's open has already happened — would otherwise replay a false
+    "just closed" the moment should_notify_close()'s in-memory per-day
+    dedup resets to empty. Guarding on "not currently inside a live
+    session" closes that hole. Discovered 2026-09-22: restarting main.py
+    ~50min into a live session fired a bogus "美股收盘" push within the
+    first couple of scan passes."""
     if now is None:
         now = datetime.now(_JST)
     elif now.tzinfo is None:
         now = _JST.localize(now)
 
     if not _is_us_trading_day(now.date() - timedelta(days=1)):
+        return False
+    if _in_us_session(now.time(), now.date()):
         return False
 
     close_t = _US_SUMMER_CLOSE if is_us_dst(now.date()) else _US_WINTER_CLOSE
