@@ -13,6 +13,7 @@ away, but the file survives a reboot so past runs stay traceable.
 """
 import logging
 import logging.handlers
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -66,13 +67,22 @@ def _emit(level: str, msg: str) -> None:
 def _is_muted() -> bool:
     """True while config.NOTIFY_MUTE_FILE exists — checked fresh on every
     push so a running process can be paused/resumed by touching/deleting the
-    file, no restart needed. Also true whenever unittest is loaded: every
-    test_*.py in this repo imports unittest and no production entry point
-    (main.py/runner.py/watchdog.py) does, so "unittest in sys.modules" is a
-    reliable "we're in a test run" signal — test suites exercise real
+    file, no restart needed. Also true during a test run: every test_*.py in
+    this repo is invoked directly (`python test_xxx.py`) or via pytest, so
+    the entry-point script name / PYTEST_CURRENT_TEST env var is a reliable
+    "we're in a test run" signal — test suites exercise real
     alert.warn/error/trade_buy/trade_sell call sites with fake data and would
-    otherwise push a phone notification for every test, every run."""
-    if "unittest" in sys.modules:
+    otherwise push a phone notification for every test, every run.
+
+    This used to check "unittest in sys.modules" instead, which broke once
+    engine.runner started pulling in the FinBERT news-sentiment model: torch
+    imports unittest internally (torch/distributed/config.py) as a normal
+    side effect, with zero relation to testing, so every production run
+    silently muted itself for its entire lifetime — no exception, no log
+    line, nothing. Discovered 2026-09-22 when a restarted main.py silently
+    dropped the market-close and market-open push notifications."""
+    entry = Path(sys.argv[0]).name if sys.argv else ""
+    if entry.startswith("test_") or "PYTEST_CURRENT_TEST" in os.environ:
         return True
     mute_file = getattr(config, "NOTIFY_MUTE_FILE", "")
     return bool(mute_file) and Path(mute_file).exists()
@@ -101,13 +111,15 @@ def _push_dingtalk(msg: str, prefix: str = "[kabu] ") -> None:
         return
     try:
         import requests
-        requests.post(
+        r = requests.post(
             webhook,
             json={"msgtype": "text", "text": {"content": f"{prefix}{msg}"}},
             timeout=5,
         )
-    except Exception:
-        pass
+        if r.status_code != 200 or r.json().get("errcode", 0) != 0:
+            _logger.warning(f"push_failed dingtalk: status={r.status_code} body={r.text[:300]!r}")
+    except Exception as e:
+        _logger.warning(f"push_failed dingtalk: {e!r}")
 
 
 def _push_telegram(msg: str, prefix: str = "[kabu] ") -> None:
@@ -118,13 +130,16 @@ def _push_telegram(msg: str, prefix: str = "[kabu] ") -> None:
     import requests
     for chat_id in chat_ids:
         try:
-            requests.post(
+            r = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={"chat_id": chat_id, "text": f"{prefix}{msg}"},
                 timeout=5,
             )
-        except Exception:
-            pass
+            if r.status_code != 200:
+                _logger.warning(f"push_failed telegram chat={chat_id}: "
+                                 f"status={r.status_code} body={r.text[:300]!r}")
+        except Exception as e:
+            _logger.warning(f"push_failed telegram chat={chat_id}: {e!r}")
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
