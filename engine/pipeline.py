@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 import config
-from engine import fundamental, news_filter, scoring
+from engine import confidence_score, fundamental, news_filter, scoring
 from engine.scanner import rank_signals
 from risk.earnings import is_earnings_blackout
 import notify.alert as alert
@@ -62,7 +62,10 @@ class Candidate:
     total_score: float
     score_label: str
     score_components: dict
-    confidence: Optional[float] = None   # v2.9 hook — always None in v1
+    confidence: Optional[float] = None   # v2.9 Confidence Score, observation-only
+    confidence_detail: Optional[dict] = None   # v2.9 — full input/component
+        # breakdown for engine.trade_tracker.log_confidence_score(); None
+        # when CONFIDENCE_SCORE_ENABLED=False or computation failed.
     reasons: List[str] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
 
@@ -74,6 +77,8 @@ def build_candidate_pool(
     score_env: str,
     weather_code: int,
     min_strength: float = None,
+    tracker=None,
+    execution: str = "REAL",
 ) -> List[Candidate]:
     """Global Filters stage: collect every BUY signal that survives the
     cheap, order-independent checks, score it, and return the survivors —
@@ -142,6 +147,24 @@ def build_candidate_pool(
         if total.label == scoring.LABEL_SKIP:
             continue
 
+        # v2.9 Confidence Score — observation-only, see engine/
+        # confidence_score.py's module docstring. Computed here (signal
+        # time, before any order is placed) so historical_win_rate/
+        # historical_expectancy can never see this trade's own outcome.
+        # Never affects `total`/label/ranking above or below this point.
+        cand_confidence = None
+        cand_confidence_detail = None
+        if config.CONFIDENCE_SCORE_ENABLED:
+            try:
+                conf_result, conf_detail = confidence_score.gather_and_score(
+                    code=code, rule_based_score=total.total, sig=sig,
+                    tracker=tracker, execution=execution,
+                )
+                cand_confidence = conf_result.confidence_score
+                cand_confidence_detail = conf_detail
+            except Exception as exc:
+                alert.log(f"confidence_score: compute failed {code} — {exc}")
+
         candidates.append(Candidate(
             code=code,
             strategy=sig.get("strategy_used", ""),
@@ -156,6 +179,8 @@ def build_candidate_pool(
                 "weather": total.weather_score,
                 "position_scale": total.position_scale,
             },
+            confidence=cand_confidence,
+            confidence_detail=cand_confidence_detail,
             raw=sig,
         ))
 

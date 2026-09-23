@@ -358,6 +358,80 @@ class TestLogEntryQuality(TradeTrackerTestCase):
         self.assertEqual(rows[0]["trade_id"], trade_id)
 
 
+class TestLogConfidenceScore(TradeTrackerTestCase):
+    """v2.9 Confidence Score — observation-only. See engine/confidence_score.py."""
+
+    def _open_trade(self, trade_id="US.MSFT_2026-01-01T09:30:00"):
+        self.tracker.log_entry(
+            trade_id=trade_id, ticker="US.MSFT", strategy_name="atr_breakout",
+            strategy_version="2.9", direction="LONG", price=420.0, shares=10,
+            position_value=4200.0, position_pct=0.1,
+            cash=9000.0, equity=10000.0, timestamp="2026-01-01T09:30:00",
+            execution="REAL",
+        )
+        return trade_id
+
+    def test_writes_full_row(self):
+        trade_id = self._open_trade()
+        self.tracker.log_confidence_score(
+            trade_id=trade_id,
+            formula_version="v2.9.0",
+            rule_based_score=84.0,
+            hmm_state="HMM_BULL", hmm_confidence=72.0, hmm_component=64.4,
+            historical_win_rate=0.6, historical_win_rate_n=10,
+            historical_expectancy_pct=0.02,
+            market_cnn_fear_greed=55.0, market_vix_close=18.0, market_component=55.0,
+            volatility_atr_pct=0.02, volatility_component=100.0,
+            volume_feature=None,
+            confidence_score=76.3,
+            weights_json='{"rule": 0.3}',
+        )
+        row = self._raw("SELECT * FROM trade_confidence_score WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertAlmostEqual(row["rule_based_score"], 84.0)
+        self.assertEqual(row["hmm_state"], "HMM_BULL")
+        self.assertAlmostEqual(row["historical_win_rate"], 0.6)
+        self.assertEqual(row["historical_win_rate_n"], 10)
+        self.assertIsNone(row["volume_feature"])
+        self.assertAlmostEqual(row["confidence_score"], 76.3)
+        self.assertIsNotNone(row["computed_at"])
+
+    def test_missing_fields_are_null_not_errors(self):
+        trade_id = self._open_trade()
+        self.tracker.log_confidence_score(trade_id=trade_id, rule_based_score=50.0,
+                                           confidence_score=50.0)
+        row = self._raw("SELECT * FROM trade_confidence_score WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertAlmostEqual(row["rule_based_score"], 50.0)
+        self.assertIsNone(row["hmm_state"])
+        self.assertIsNone(row["historical_win_rate"])
+
+    def test_same_trade_id_overwrites_not_crashes(self):
+        trade_id = self._open_trade()
+        for score in (60.0, 80.0):
+            self.tracker.log_confidence_score(
+                trade_id=trade_id, rule_based_score=score, confidence_score=score)
+        rows = self._raw("SELECT * FROM trade_confidence_score WHERE trade_id=?",
+                          (trade_id,))
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0]["confidence_score"], 80.0)
+
+    def test_query_confidence_score_joins_trades(self):
+        trade_id = self._open_trade()
+        self.tracker.log_confidence_score(
+            trade_id=trade_id, rule_based_score=84.0, confidence_score=76.3)
+        df = self.tracker.query_confidence_score()
+        self.assertEqual(len(df), 1)
+        row = df.iloc[0]
+        self.assertEqual(row["symbol"], "US.MSFT")
+        self.assertAlmostEqual(row["entry_price"], 420.0)
+        self.assertAlmostEqual(row["confidence_score"], 76.3)
+
+    def test_query_confidence_score_empty_when_no_rows(self):
+        df = self.tracker.query_confidence_score()
+        self.assertTrue(df.empty)
+
+
 class TestLogExitDiagnostics(TradeTrackerTestCase):
     """v2.9.x Exit Diagnostics — observation-only trade-shape classification
     built during the 2026-09 STRATEGY_EXIT giveback investigation. See

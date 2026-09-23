@@ -1207,3 +1207,11 @@ RESEARCH_OPTIONS_MARKET: str = "US_SECURITY"
 # 不接入自动调度，手动跑 research/indicator_validator.py。
 INDICATOR_SHADOW_RSI_OVERSOLD: float = 30.0
 INDICATOR_SHADOW_RSI_OVERBOUGHT: float = 70.0
+
+# ── V2.9 Confidence Score（信号质量评分，观察层）───────────────────────────────
+# 只计算、只记录，不参与BUY/SELL/仓位/风控任何决策——见 engine/confidence_score.py
+# 模块docstring。engine/pipeline.py::build_candidate_pool() 只把结果挂在
+# Candidate.confidence/.confidence_detail上供记录，rank_candidates()排序键
+# 不读取它。关闭时 Candidate.confidence 始终为None，不产生额外DB写入，
+# 用于验证"V2.9开关ON/OFF不改变任何实际Buy/Sell decision"这条集成测试。
+CONFIDENCE_SCORE_ENABLED: bool = True

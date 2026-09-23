@@ -284,6 +284,38 @@ CREATE TABLE IF NOT EXISTS trade_exit_diagnostics (
     recorded_at              TEXT
 );
 
+-- v2.9 — Confidence Score (see engine/confidence_score.py). One row per
+-- trade, OBSERVATION ONLY: nothing in this codebase reads these columns to
+-- gate/scale a BUY/SELL/exit/position-size — see that module's module
+-- docstring for the full hard-constraint list. Stores both the raw inputs
+-- (rule_based_score/hmm_state/historical_win_rate/historical_expectancy_pct/
+-- market_*/volatility_atr_pct/volume_feature) and the derived per-component
+-- 0-100 scores, so a later statistical validation pass can audit exactly
+-- what fed the final confidence_score without re-deriving it from other
+-- tables. weights_json records the ACTUAL renormalized weights used for
+-- this row (components that were None are excluded, not zero-weighted) —
+-- see engine/confidence_score.py::compute_confidence_score().
+CREATE TABLE IF NOT EXISTS trade_confidence_score (
+    trade_id                    TEXT PRIMARY KEY REFERENCES trades(trade_id),
+    formula_version              TEXT,
+    rule_based_score              REAL,
+    hmm_state                     TEXT,
+    hmm_confidence                REAL,
+    hmm_component                 REAL,
+    historical_win_rate           REAL,
+    historical_win_rate_n         INTEGER,
+    historical_expectancy_pct     REAL,
+    market_cnn_fear_greed         REAL,
+    market_vix_close              REAL,
+    market_component              REAL,
+    volatility_atr_pct            REAL,
+    volatility_component          REAL,
+    volume_feature                REAL,
+    confidence_score               REAL,
+    weights_json                   TEXT,
+    computed_at                    TEXT
+);
+
 CREATE TABLE IF NOT EXISTS trade_research_snapshot (
     trade_id               TEXT PRIMARY KEY REFERENCES trades(trade_id),
     signal_time             TEXT,
@@ -731,6 +763,55 @@ class TradeTracker:
             FROM trade_entry_quality q
             JOIN trades t ON t.trade_id = q.trade_id
             LEFT JOIN trade_attribution a ON a.trade_id = q.trade_id
+        """
+        return pd.read_sql_query(query, self._conn)
+
+    _CONFIDENCE_SCORE_COLUMNS = [
+        "formula_version", "rule_based_score", "hmm_state", "hmm_confidence",
+        "hmm_component", "historical_win_rate", "historical_win_rate_n",
+        "historical_expectancy_pct", "market_cnn_fear_greed", "market_vix_close",
+        "market_component", "volatility_atr_pct", "volatility_component",
+        "volume_feature", "confidence_score", "weights_json",
+    ]
+
+    def log_confidence_score(self, trade_id: str, **fields) -> None:
+        """v2.9 Confidence Score — see engine/confidence_score.py's module
+        docstring for the observation-only contract. Typically called with
+        **engine.confidence_score.gather_and_score()'s `detail` dict.
+        Unknown/missing keys in `fields` are left NULL, matching
+        log_entry_quality()'s convention. INSERT OR REPLACE for the same
+        idempotency reason as log_entry() (safe to re-run)."""
+        ts = datetime.now().isoformat()
+        cols = ["trade_id", *self._CONFIDENCE_SCORE_COLUMNS, "computed_at"]
+        values = [trade_id] + [fields.get(c) for c in self._CONFIDENCE_SCORE_COLUMNS] + [ts]
+        placeholders = ", ".join("?" for _ in cols)
+        with _write_lock:
+            self._conn.execute(
+                f"INSERT OR REPLACE INTO trade_confidence_score ({', '.join(cols)}) "
+                f"VALUES ({placeholders})",
+                tuple(values),
+            )
+            self._conn.commit()
+
+    def query_confidence_score(self) -> pd.DataFrame:
+        """v2.9 — one row per trade_confidence_score row, joined against the
+        trades columns it deliberately doesn't duplicate (outcome fields:
+        pnl/pnl_pct/exit_reason_code/holding_days). Used by future V2.9.x
+        statistical validation; not called from any trading path."""
+        query = """
+            SELECT
+                t.trade_id, t.ticker AS symbol, t.strategy_name,
+                t.entry_price, t.entry_time, t.exit_time, t.exit_price,
+                t.pnl, t.pnl_pct, t.exit_reason_code, t.holding_days,
+                t.execution,
+                c.formula_version, c.rule_based_score, c.hmm_state,
+                c.hmm_confidence, c.hmm_component, c.historical_win_rate,
+                c.historical_win_rate_n, c.historical_expectancy_pct,
+                c.market_cnn_fear_greed, c.market_vix_close, c.market_component,
+                c.volatility_atr_pct, c.volatility_component, c.volume_feature,
+                c.confidence_score, c.weights_json, c.computed_at
+            FROM trade_confidence_score c
+            JOIN trades t ON t.trade_id = c.trade_id
         """
         return pd.read_sql_query(query, self._conn)
 

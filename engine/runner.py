@@ -153,6 +153,7 @@ def run_once(
     except Exception as exc:
         alert.log(f"trade_tracker: init failed, trade DB disabled this pass — {exc}")
         tracker = None
+    execution_label = "PAPER" if is_jp_pass else "REAL"
 
     # ── Portfolio-level guard ─────────────────────────────────────────────────
     # 2026-07-11 fix: this used to `return` here, which skipped scan() and the
@@ -758,7 +759,8 @@ def run_once(
     # placement per candidate), which is unchanged existing behavior, not part
     # of the ranking-order bug this refactor fixes.
     candidates = pipeline.build_candidate_pool(
-        results, portfolio, macro_block, score_env, weather_code)
+        results, portfolio, macro_block, score_env, weather_code,
+        tracker=tracker, execution=execution_label)
     ranked = pipeline.rank_candidates(candidates)
     # Active count excludes QQQ core position
     active_count = sum(1 for p in portfolio.data["positions"].values()
@@ -920,7 +922,7 @@ def run_once(
                         market_environment=weather_code, entry_rank=entry_rank,
                         risk_per_trade=config.RISK_PER_TRADE_PCT,
                         market=infer_market(code),
-                        execution="PAPER" if is_jp_pass else "REAL",
+                        execution=execution_label,
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_entry failed {code} — {exc}")
@@ -970,6 +972,21 @@ def run_once(
                     )
                 except Exception as exc:
                     alert.log(f"trade_tracker: log_research_snapshot failed {code} — {exc}")
+                if cand.confidence_detail is not None:
+                    try:
+                        # v2.9 Confidence Score — observation-only, see
+                        # engine/confidence_score.py's module docstring.
+                        # cand.confidence_detail was computed once at signal
+                        # time (engine/pipeline.py::build_candidate_pool),
+                        # BEFORE this BUY was placed — never recomputed here,
+                        # so this write can never leak this trade's own fill/
+                        # outcome back into its own confidence inputs.
+                        tracker.log_confidence_score(
+                            trade_id=_trade_id(code, pos_after.get("entry_time")),
+                            **cand.confidence_detail,
+                        )
+                    except Exception as exc:
+                        alert.log(f"trade_tracker: log_confidence_score failed {code} — {exc}")
 
     # ── 2d. QQQ Beta 底仓：固定目标仓位，站上MA200时买入/补仓到目标比例 ──────
     # 不再看活跃仓位数量——这是永远划出的固定死仓，不是"信号不够时的填充"。

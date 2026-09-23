@@ -193,5 +193,74 @@ class TestBuildCandidatePool(unittest.TestCase):
         self.assertEqual(pool, [])
 
 
+class TestConfidenceScoreDoesNotAffectDecisions(unittest.TestCase):
+    """V2.9 integration guarantee (spec section 十四): toggling
+    config.CONFIDENCE_SCORE_ENABLED must not change which candidates survive
+    Candidate Pool, their total_score/score_label, or rank_candidates()'
+    output order — only whether Candidate.confidence/.confidence_detail get
+    populated for observation/logging."""
+
+    def setUp(self):
+        self._orig_enabled = config.CONFIDENCE_SCORE_ENABLED
+        self._orig_classify = news_filter.classify_code
+        self._orig_score = fundamental.score
+        news_filter.classify_code = lambda code: {
+            "score": 70.0, "tier": 1, "matched_keyword": None}
+        fundamental.score = lambda code, env: {
+            "score": 70.0, "tier": 1, "reason": "ok"}
+
+    def tearDown(self):
+        config.CONFIDENCE_SCORE_ENABLED = self._orig_enabled
+        news_filter.classify_code = self._orig_classify
+        fundamental.score = self._orig_score
+
+    def _build_pool(self):
+        results = {
+            "US.BKNG": _signal("US.BKNG", strength=0.95),
+            "US.ABNB": _signal("US.ABNB", strength=0.55),
+            "US.WEAK": _signal("US.WEAK", strength=0.01),
+        }
+        portfolio = _FakePortfolio()
+        with mock.patch("engine.pipeline.is_earnings_blackout", return_value=False):
+            return build_candidate_pool(results, portfolio, macro_block=None,
+                                        score_env="paper", weather_code=2)
+
+    def test_on_off_produce_identical_decisions(self):
+        config.CONFIDENCE_SCORE_ENABLED = True
+        pool_on = self._build_pool()
+        config.CONFIDENCE_SCORE_ENABLED = False
+        pool_off = self._build_pool()
+
+        self.assertEqual([c.code for c in pool_on], [c.code for c in pool_off])
+        for on, off in zip(pool_on, pool_off):
+            self.assertEqual(on.total_score, off.total_score)
+            self.assertEqual(on.score_label, off.score_label)
+            self.assertEqual(on.score_components, off.score_components)
+            self.assertEqual(on.signal_strength, off.signal_strength)
+
+        ranked_on = [c.code for c in rank_candidates(pool_on)]
+        ranked_off = [c.code for c in rank_candidates(pool_off)]
+        self.assertEqual(ranked_on, ranked_off)
+
+    def test_disabled_leaves_confidence_fields_none(self):
+        config.CONFIDENCE_SCORE_ENABLED = False
+        pool = self._build_pool()
+        self.assertTrue(pool)
+        for cand in pool:
+            self.assertIsNone(cand.confidence)
+            self.assertIsNone(cand.confidence_detail)
+
+    def test_enabled_populates_confidence_without_a_tracker(self):
+        # No tracker passed -> historical stats degrade to None, but the
+        # rest of the score (rule_based_score at minimum) still computes.
+        config.CONFIDENCE_SCORE_ENABLED = True
+        pool = self._build_pool()
+        self.assertTrue(pool)
+        for cand in pool:
+            self.assertIsNotNone(cand.confidence)
+            self.assertIsNotNone(cand.confidence_detail)
+            self.assertEqual(cand.confidence_detail["rule_based_score"], cand.total_score)
+
+
 if __name__ == "__main__":
     unittest.main()
