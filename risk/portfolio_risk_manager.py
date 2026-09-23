@@ -263,6 +263,18 @@ def _rank_satellites_by_current_weakness(tracker_positions: Dict[str, dict],
     return sorted(satellite_codes, key=_key)
 
 
+def rank_satellites_by_current_weakness(tracker_positions: Dict[str, dict],
+                                         results: Dict[str, dict]) -> List[str]:
+    """Public entry point for callers outside this module (currently
+    risk/qqq_core_recovery.py's Level 3 release plan, see that module's
+    docstring) that need the exact same weakest-first ranking plan_rebalance()
+    uses — a thin, logic-free alias so a second caller doesn't need its own
+    copy of the ranking rules and this module's own callers/tests stay on the
+    private name unchanged. See _rank_satellites_by_current_weakness() above
+    for the actual ordering rules."""
+    return _rank_satellites_by_current_weakness(tracker_positions, results)
+
+
 def plan_rebalance(broker_state: BrokerState, tracker_positions: Dict[str, dict],
                     target_pct: float, results: Dict[str, dict]) -> List[RebalanceOrder]:
     """Pure. Cascading 3-priority sell plan to bring exposure back to

@@ -38,7 +38,7 @@ from portfolio import capacity_manager
 from portfolio import broker_state as broker_state_mod
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
-from risk import guard, sizing, portfolio_risk_manager, portfolio_position_manager
+from risk import guard, sizing, portfolio_risk_manager, portfolio_position_manager, qqq_core_recovery
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash, normalize_exit_reason,
@@ -679,6 +679,54 @@ def run_once(
                     trade_id=portfolio.next_trade_id(), env=env_label,
                 )
 
+    # ── v2.13 QQQ Core Recovery / Reclaim (Phase 2.1, Observation Mode) ──────
+    # 解决"QQQ重新站上MA200后，能否在普通仓位挤占下拿回25%目标仓位"——只
+    # 影响下面2c NEW_ENTRY一处的可用现金/敞口判断（见risk/qqq_core_recovery.py
+    # 模块docstring），不mutate remaining_broker_cash/pm_state.remaining_
+    # budget本身，2d（下面，完全不动）因此自动拿回2c少花的部分，不需要任何
+    # "归还"步骤——没有可回滚的临时状态，异常安全性由架构保证，不靠
+    # try/finally。macro_block=True时完全跳过（不load/advance/save state）：
+    # 那是系统性风险熔断，不是"被普通仓位挤占"，不该计入no-progress计数。
+    qqq_reserve_cash = 0.0
+    qqq_reserve_pm_budget = 0.0
+    if not is_jp_pass and not macro_block and assessment is not None:
+        qqq_shortfall = qqq_core_recovery.compute_shortfall(
+            qqq_concentration.qqq_value if qqq_concentration else None,
+            assessment.total_assets)
+        ordinary_exposure_pct = (
+            (assessment.long_mv - (qqq_concentration.qqq_value or 0.0)) / assessment.total_assets
+            if qqq_concentration and assessment.total_assets else None)
+        recovery_state = qqq_core_recovery.advance_state(
+            qqq_core_recovery.load_state(), qqq_above_ma=_qqq_above_ma(),
+            shortfall=qqq_shortfall, ordinary_exposure_pct=ordinary_exposure_pct)
+        qqq_core_recovery.save_state(recovery_state)
+
+        reserve_cash_raw = qqq_core_recovery.reserve_amount(
+            recovery_state, qqq_shortfall, assessment.total_assets, remaining_broker_cash)
+        reserve_pm_raw = qqq_core_recovery.reserve_amount(
+            recovery_state, qqq_shortfall, assessment.total_assets,
+            pm_state.remaining_budget if pm_state is not None else None)
+        qqq_core_recovery.log_recovery_pass(
+            recovery_state, qqq_shortfall, reserve_cash_raw, reserve_pm_raw,
+            enabled=config.QQQ_CORE_RECOVERY_ENABLED)
+
+        if config.QQQ_CORE_RECOVERY_ENABLED:
+            qqq_reserve_cash = reserve_cash_raw
+            qqq_reserve_pm_budget = reserve_pm_raw
+        if recovery_state.reserve_active:
+            alert.log(f"qqq_core_recovery: shortfall=${qqq_shortfall:,.0f}  "
+                      f"no_progress_passes={recovery_state.consecutive_no_progress_passes}  "
+                      f"reserve_cash=${reserve_cash_raw:,.0f}  reserve_pm_budget=${reserve_pm_raw:,.0f}"
+                      + ("" if config.QQQ_CORE_RECOVERY_ENABLED else "（观察模式，不影响实际下单）"))
+        if recovery_state.level3_eligible:
+            level3_plan = qqq_core_recovery.plan_level3_release(
+                portfolio.data["positions"], results, shortfall_remaining=qqq_shortfall)
+            qqq_core_recovery.log_level3_plan(
+                recovery_state, qqq_shortfall, level3_plan, ordinary_exposure_pct)
+            alert.warn(f"qqq_core_recovery: Level3 PLAN ONLY（不下单，仅记录）— "
+                       f"{len(level3_plan)}笔候选卖出，连续{recovery_state.consecutive_no_progress_passes}"
+                       f"个pass无进展（episode始于{recovery_state.episode_started_at}）")
+
     # ── 2c. Open new positions — Two-Phase Execution ──────────────────────────
     # Candidate Pool + Global Filters + Ranking Engine live in engine/pipeline.py
     # (already-held/cooldown/min-strength/earnings-blackout/macro_block filtering,
@@ -784,7 +832,10 @@ def run_once(
         # 欠款）。broker状态本轮取数失败时remaining_broker_cash为None，不做
         # 这层约束——那种情况risk_block已经把macro_block整体挡死了。
         if remaining_broker_cash is not None:
-            max_affordable = int(remaining_broker_cash // price)
+            # qqq_reserve_cash为0.0（Observation Mode或没有活跃Recovery
+            # episode时的默认值）时这一行跟改动前完全等价——见上面v2.13
+            # QQQ Core Recovery那段。
+            max_affordable = int(max(0.0, remaining_broker_cash - qqq_reserve_cash) // price)
             if max_affordable < qty:
                 qty = max_affordable
         if qty <= 0:
@@ -792,7 +843,7 @@ def run_once(
             continue
         qty, pm_allowed_2c = _pm_plan_buy(
             pm_state, section="2C_NEW_ENTRY", code=code,
-            requested_qty=qty, price=price)
+            requested_qty=qty, price=price, extra_reserve=qqq_reserve_pm_budget)
         if qty <= 0:
             alert.warn_skip(code, f"{code} 被Portfolio Position Manager阻止（敞口预算不足），跳过")
             continue
@@ -1184,7 +1235,7 @@ class _PMPassState:
 
 
 def _pm_plan_buy(pm_state: Optional[_PMPassState], section: str, code: str,
-                  requested_qty: int, price: float) -> Tuple[int, int]:
+                  requested_qty: int, price: float, extra_reserve: float = 0.0) -> Tuple[int, int]:
     """v2.12 Portfolio Position Manager gate — call right before sizing a BUY
     is finalized (after any existing cash-based clamp), from all four buy
     paths (2a/2b/2c/2d). Returns (applied_qty, allowed_qty):
@@ -1196,6 +1247,13 @@ def _pm_plan_buy(pm_state: Optional[_PMPassState], section: str, code: str,
       applied_qty — allowed_qty when config.PORTFOLIO_POSITION_MANAGER_ENABLED,
                     otherwise requested_qty unchanged (Observation Mode:
                     real order size is provably untouched).
+    extra_reserve — v2.13 QQQ Core Recovery hook (see risk/qqq_core_recovery.py):
+                    an ad-hoc amount subtracted from pm_state.remaining_budget
+                    for THIS call's clamp only — pm_state.remaining_budget
+                    itself is never mutated, so callers that don't pass this
+                    (2a/2b/2d — all default to 0.0) are byte-for-byte
+                    unaffected. Only engine/runner.py's 2C_NEW_ENTRY call site
+                    passes a non-zero value.
     Always logs one row via portfolio_position_manager.log_attempt(),
     regardless of the ENABLED flag — that's what makes "how much would PM
     have blocked" answerable from the log alone in Observation Mode."""
@@ -1204,7 +1262,8 @@ def _pm_plan_buy(pm_state: Optional[_PMPassState], section: str, code: str,
     if pm_state.remaining_budget is None:
         allowed_qty = requested_qty
     else:
-        allowed_qty = max(0, min(requested_qty, int(pm_state.remaining_budget // price)))
+        effective_budget = max(0.0, pm_state.remaining_budget - extra_reserve)
+        allowed_qty = max(0, min(requested_qty, int(effective_budget // price)))
     applied_qty = allowed_qty if pm_state.enabled else requested_qty
     if allowed_qty >= requested_qty:
         action = "ALLOW"

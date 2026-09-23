@@ -1030,6 +1030,45 @@ PORTFOLIO_REGIME_MAX_EXPOSURE: dict = {   # INITIAL / NOT VALIDATED placeholder
     "RISK_OFF": 0.50,
 }
 
+# ── QQQ Core Recovery / Reclaim（Phase 2.1，2026-09-23，观察模式）───────────
+# 解决"QQQ重新站上MA200后，能否在普通仓位挤占下拿回25%目标仓位"的问题——
+# QQQ空仓期间释放出来的现金/敞口可以正常被普通策略使用（不永久锁死25%），
+# 但QQQ重新获得Core资格后，如果shortfall连续多个pass都没有实质缩小（说明
+# 不是"现有资源不够、正在自然补"，而是被普通策略持续抢占），才逐步收紧
+# 2c NEW_ENTRY一处的可用现金/敞口，为QQQ的既有2d补仓逻辑（不动）腾出空间。
+# 见 risk/qqq_core_recovery.py 模块docstring。跟v2.10 assessment.tier/
+# macro_block（FROZEN）完全不碰——macro_block=True时Recovery跟普通BUY
+# 一样被挡住，且那种pass不计入下面的no-progress计数（系统性熔断不是"被
+# 普通仓位挤占"）。
+QQQ_CORE_RECOVERY_ENABLED: bool = False
+    # 总开关：False（默认/观察模式）时Reserve仍然每pass正常计算+写日志
+    # （C:\KabuData\portfolio\qqq_recovery_log.jsonl），但不会真的从2c
+    # NEW_ENTRY可用的现金/敞口判断里扣钱——跟PM v2.12当年上线的Observation
+    # Mode是同一个套路，先跑一段时间看日志再决定要不要打开。
+QQQ_CORE_RECOVERY_MAX_RESERVE_PCT: float = 0.05
+    # INITIAL / NOT VALIDATED —— 单pass最多为QQQ预留多少总资产比例，避免
+    # QQQ一站上MA200就在一个pass里抢光普通策略的可用资金；5%只是第一版
+    # 观察参数，不代表已验证的最优值。
+QQQ_CORE_RECOVERY_TRIGGER_PASSES: int = 3
+    # INITIAL / NOT VALIDATED —— 连续多少个pass"shortfall没有实质缩小"
+    # 才从"什么都不做"升级到Reserve生效。注意这是pass数不是时间：
+    # run_once()的实际调度频率变化时，这个数字对应的真实时长也会变——
+    # 所以RecoveryState持久化了episode_started_at，Observation阶段要看
+    # 日志里的实际耗时，不要把"3"直接当成一个时间尺度。
+QQQ_CORE_RECOVERY_LEVEL3_TRIGGER_PASSES: int = 15
+    # INITIAL / NOT VALIDATED —— 必须 > TRIGGER_PASSES。连续多少个pass仍
+    # 然没有实质进展，才把level3_eligible标记为True——本阶段只产出计划+
+    # 日志（见QQQ_CORE_RECOVERY_LEVEL3_AUTO_EXECUTE），不会真的卖出。
+QQQ_CORE_RECOVERY_LEVEL3_ORDINARY_EXPOSURE_MIN_PCT: float = 0.60
+    # INITIAL / NOT VALIDATED —— 普通仓位（不含QQQ）占broker总资产比例，
+    # 低于这个值即使长期没进展也不进入Level3——缺口迟迟补不上如果不是因为
+    # 普通仓位占用过高（比如只是市场缺乏信号、现金一直用不出去），就不该
+    # 归咎到"要不要卖普通仓位"这个问题上。
+QQQ_CORE_RECOVERY_LEVEL3_AUTO_EXECUTE: bool = False
+    # 本阶段代码里不存在读取这个开关的执行路径（Level3只有PLAN/LOG，物理上
+    # 没有能下单的调用链）——这里先占位声明，供未来如果要做可执行版本时用，
+    # 不要在这次改动里接上任何实际下单逻辑。
+
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
