@@ -1204,6 +1204,35 @@ AI_DECISION_MODE: str = "OFF"
     # ACTIVE——AI 在 V3.5 里永远只是 Decision Support，不是 Risk/Rule
     # Authority，见 ai_decision/decision_layer.py 模块 docstring。
 
+# ── V3.6-A Trade Intelligence (Research/Shadow-Mode Only, 2026-09) ──────────
+# 读取 trade_history.db（+ 复用 research/early_failure_trajectory.py 的
+# MFE/MAE trajectory），对 Early Failure / Exit / Signal-Confidence /
+# Position Size 四类做简单统计意义上的 Pattern Discovery，把结果写进独立的
+# trade_intelligence.db（Observation / Candidate Pattern 两种状态，没有
+# Validated Pattern / Production Rule——那是后续阶段）。这里的常量永远不会被
+# engine/runner.py、strategies/*、risk/*、portfolio/*、position_manager/*、
+# exit_engine/*、ai_decision/* 读取，只影响 research/trade_intelligence_*.py
+# 计算/记录什么，不影响任何真实交易决策。见 research/trade_intelligence_runner.py
+# 模块 docstring。
+TRADE_INTELLIGENCE_DB_PATH: str = r"C:\KabuData\research\trade_intelligence.db"
+TRADE_INTELLIGENCE_REPORT_DIR: str = r"C:\KabuData\research\reports"
+
+TRADE_INTELLIGENCE_LLM_MODE: str = "OFF"
+    # OFF（默认，NullNarrativeProvider）/ SHADOW（MockNarrativeProvider，
+    # 模板化叙述，只复述 context 里已有的数字）。没有 ACTIVE——跟
+    # RISK_ENGINE_LLM_MODE/AI_DECISION_MODE 同款，真实 LLM 接入推迟到后续阶段。
+
+# 样本量门槛：这个系统一次刷新只有几十笔交易，不是几千笔，所以门槛刻意设低，
+# 跟 research/early_failure_monitor.py 在 n=18~35 时就敢报告的先例一致。
+TRADE_INTELLIGENCE_MIN_OBSERVATION_N: int = 5
+TRADE_INTELLIGENCE_MIN_CANDIDATE_N: int = 15
+TRADE_INTELLIGENCE_MIN_CANDIDATE_EFFECT_PCT: float = 0.15
+TRADE_INTELLIGENCE_MIN_CANDIDATE_PRECISION: float = 0.70
+
+TRADE_INTELLIGENCE_CONFIDENCE_BUCKETS: tuple = (40.0, 60.0)
+TRADE_INTELLIGENCE_HOLDING_DAYS_BUCKETS: tuple = (2, 5, 10)
+TRADE_INTELLIGENCE_POSITION_PCT_BUCKETS: tuple = (0.05, 0.10, 0.15)
+
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
