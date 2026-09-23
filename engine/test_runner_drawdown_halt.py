@@ -24,6 +24,7 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+import position_manager
 import test_support
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
@@ -69,11 +70,19 @@ class TestDrawdownHaltStillRunsExitCheck(unittest.TestCase):
             "has_earnings_risk": runner.event_risk.has_earnings_risk,
             "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
             "regime_evaluate_and_log": runner.regime_evaluate_and_log,
+            "POSITION_MANAGER_V31_MODE": config.POSITION_MANAGER_V31_MODE,
         }
 
         # Regime Observation Layer (2026-09-23) — pure/no-op stub so tests
         # never write to the real C:\KabuData\portfolio\regime_log.jsonl.
         runner.regime_evaluate_and_log = lambda *a, **kw: None
+        # V3.1-A Position Manager (2026-09-23) — this file isn't testing it;
+        # OFF makes engine/runner.py's new 2b.5 block a complete no-op (no
+        # confidence_score/regime_store I/O, no writes to the real
+        # position_manager_state.json/position_manager_log.jsonl) so the
+        # seeded position in _seed_losing_position() below doesn't pick up
+        # an unrelated side effect.
+        config.POSITION_MANAGER_V31_MODE = position_manager.MODE_OFF
         runner.broker_state_mod.fetch_broker_state = lambda trd_env: _NO_RISK_BROKER_STATE
         runner.event_risk.has_earnings_risk = lambda code, trade_date=None: False
         runner.research_snapshot.build_trade_research_snapshot = lambda *a, **kw: {}
@@ -113,6 +122,7 @@ class TestDrawdownHaltStillRunsExitCheck(unittest.TestCase):
         runner.event_risk.has_earnings_risk = self._orig["has_earnings_risk"]
         runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         runner.regime_evaluate_and_log = self._orig["regime_evaluate_and_log"]
+        config.POSITION_MANAGER_V31_MODE = self._orig["POSITION_MANAGER_V31_MODE"]
         self._tmpdir.cleanup()
         test_support.unmute_alert_file_logging(self._alert_handlers)
 

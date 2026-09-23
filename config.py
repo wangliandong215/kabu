@@ -1235,3 +1235,65 @@ CONFIDENCE_SCORE_ENABLED: bool = True
 # REAL环境的下单也不会应用这个乘数。要放开到实盘需要独立的V3.0-B产品决策，
 # 而不是简单改这一个bool。
 DYNAMIC_POSITION_SIZING_ENABLED: bool = True
+
+# ── V3.1-A Position Manager（持仓管理,Paper/Observation Only）───────────────
+# V3.0-A(上面)决定"建仓时买多少";这里决定"持仓期间目标仓位应该是多少"——
+# 完全独立的新增层,不改 Entry/Exit/Ranking/Risk Guard/Capacity/Exposure 的
+# 任何既有规则。见 position_manager/ 包 docstring。
+#
+# OFF          → Position Manager 整段不运行(等同没有这个功能)
+# OBSERVATION  → 正常计算 Confidence/HMM/Volatility/Drawdown 四个信号 + 聚合
+#                + 写完整日志(position_manager_log.jsonl),但 Decision=REDUCE
+#                时 Execution 固定 SKIPPED_OBSERVATION_MODE,不调用
+#                _place_order,不改变实际 Paper Position（当前默认值——2026-09
+#                上线状态,需要人工观察几天日志确认后才手动改 ACTIVE）
+# ACTIVE       → 在 OBSERVATION 基础上,REDUCE 经现有下单路径真正执行
+POSITION_MANAGER_V31_MODE: str = "OBSERVATION"
+
+# Confidence Change Reduction — 变化幅度阈值（0-100分制，与confidence_score
+# 同一量纲）。变化 <= MINOR 不触发；达到 MODERATE/SEVERE 对应更明显的减仓。
+CONF_DROP_MINOR: float = 10.0
+CONF_DROP_MODERATE: float = 20.0
+CONF_DROP_SEVERE: float = 30.0
+CONF_DROP_MODERATE_REDUCTION: float = 0.15
+CONF_DROP_SEVERE_REDUCTION: float = 0.35
+
+# HMM State Change Reduction — (from_state, to_state) -> reduction_pct。状态
+# 标签沿用 engine/regime_store.py 已有的 HMM_BULL/HMM_SIDEWAYS/HMM_CORRECTION/
+# HMM_BEAR 四态（与 engine/confidence_score.py 的 _HMM_BASE_SCORE 同一套标
+# 签）。未列出的组合（含同状态、或状态转好）一律 reduction=0，不触发。
+HMM_TRANSITION_REDUCTION = {
+    ("HMM_BULL", "HMM_SIDEWAYS"):   0.10,
+    ("HMM_BULL", "HMM_CORRECTION"): 0.15,
+    ("HMM_BULL", "HMM_BEAR"):       0.25,
+    ("HMM_SIDEWAYS", "HMM_CORRECTION"): 0.10,
+    ("HMM_SIDEWAYS", "HMM_BEAR"):       0.20,
+    ("HMM_CORRECTION", "HMM_BEAR"):     0.15,
+}
+
+# Volatility Reduction — atr_pct = ATR / current_price 分档
+VOL_ELEVATED_ATR_PCT: float = 0.03
+VOL_HIGH_ATR_PCT: float = 0.05
+VOL_ELEVATED_REDUCTION: float = 0.10
+VOL_HIGH_REDUCTION: float = 0.20
+
+# Drawdown Reduction — 相对持仓期内最高价的回撤分档
+DRAWDOWN_TIER1_PCT: float = 0.03   # -3%
+DRAWDOWN_TIER2_PCT: float = 0.05   # -5%
+DRAWDOWN_TIER3_PCT: float = 0.08   # -8%
+DRAWDOWN_TIER1_REDUCTION: float = 0.05
+DRAWDOWN_TIER2_REDUCTION: float = 0.10
+DRAWDOWN_TIER3_REDUCTION: float = 0.20
+
+# 低于此幅度不触发 REDUCE，避免舍入/噪声导致每周期反复触发
+PM_MIN_REDUCTION_PCT: float = 5.0
+
+# ── V3.1 LLM Advisory Interface（预留接口，本次不真正调用）─────────────────
+# OFF     → 完全不导入/不调用任何 LLM 相关代码（当前默认，唯一支持的值）
+# SHADOW  → 未来：调用本地 LLM 做 Review，但只记录，不影响任何实际决策
+# ACTIVE  → 未来：Risk Guard 批准后才可能采纳 LLM 建议——仍然不能绕过 Risk
+#           Guard / Exposure Limit / Sector Limit / Capacity / Maximum Position
+# 本阶段 SHADOW/ACTIVE 路径下的 reviewer 只是占位实现，会 raise
+# NotImplementedError，并被 position_manager/llm_interface.py 安全吞掉——见
+# regime/llm_provider.py 的同款先例。
+POSITION_LLM_MODE: str = "OFF"

@@ -20,6 +20,7 @@ from pathlib import Path
 import config
 import data.fetcher as fetcher_mod
 import engine.runner as runner
+import position_manager
 import test_support
 from portfolio.broker_state import BrokerState, BrokerPosition
 from portfolio.tracker import Portfolio
@@ -82,10 +83,18 @@ class QQQCoreRecoveryGateTestCase(unittest.TestCase):
             "qcr_log_recovery_pass": qqq_core_recovery.log_recovery_pass,
             "qcr_log_level3_plan": qqq_core_recovery.log_level3_plan,
             "regime_evaluate_and_log": runner.regime_evaluate_and_log,
+            "POSITION_MANAGER_V31_MODE": config.POSITION_MANAGER_V31_MODE,
         }
         # Regime Observation Layer (2026-09-23) — pure/no-op stub so tests
         # never write to the real C:\KabuData\portfolio\regime_log.jsonl.
         runner.regime_evaluate_and_log = lambda *a, **kw: None
+        # V3.1-A Position Manager (2026-09-23) — this file isn't testing it;
+        # OFF makes engine/runner.py's new 2b.5 block a complete no-op so
+        # US.WEAK (opened via portfolio.open_position() below) doesn't pick
+        # up an unrelated side effect (real confidence_score/regime_store
+        # I/O, real position_manager_state.json/position_manager_log.jsonl
+        # writes).
+        config.POSITION_MANAGER_V31_MODE = position_manager.MODE_OFF
         # _qqq_above_ma() hits live quotes -- stub True so the QQQ Beta floor's
         # own MA200 exit/top-up logic never confounds these tests.
         runner._qqq_above_ma = lambda: True
@@ -166,6 +175,7 @@ class QQQCoreRecoveryGateTestCase(unittest.TestCase):
         qqq_core_recovery.log_recovery_pass = self._orig["qcr_log_recovery_pass"]
         qqq_core_recovery.log_level3_plan = self._orig["qcr_log_level3_plan"]
         runner.regime_evaluate_and_log = self._orig["regime_evaluate_and_log"]
+        config.POSITION_MANAGER_V31_MODE = self._orig["POSITION_MANAGER_V31_MODE"]
         self._tmpdir.cleanup()
         test_support.unmute_alert_file_logging(self._alert_handlers)
 

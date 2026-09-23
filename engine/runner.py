@@ -40,6 +40,8 @@ from portfolio import broker_state as broker_state_mod
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
 from risk import guard, sizing, dynamic_sizing, portfolio_risk_manager, portfolio_position_manager, qqq_core_recovery
+from engine import confidence_score
+import position_manager
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash, normalize_exit_reason,
@@ -698,6 +700,84 @@ def run_once(
                     position_count=portfolio.position_count(),
                     trade_id=portfolio.next_trade_id(), env=env_label,
                 )
+
+    # ── 2b.5. V3.1-A Position Manager（持仓管理，Paper/Observation Only）──────
+    # 决定"持仓期间目标仓位应该是多少"——完全独立于上面 2a/2b（谁买/买多少）
+    # 和下面 QQQ Core Recovery（QQQ底仓专属）。跳过 core_etf（QQQ 底仓死命
+    # 令，唯一退出条件是跌破MA200，见上面exit loop注释，这里不加任何额外
+    # 判断）。config.POSITION_MANAGER_V31_MODE 控制：
+    #   OFF          — 整段跳过，不构造Context、不写日志，等同没有这个功能
+    #   OBSERVATION  — 正常计算+写完整日志，REDUCE 的 execution 固定
+    #                  SKIPPED_OBSERVATION_MODE，不下单，不改变实际持仓
+    #                  （当前默认值——见 config.py 该常量注释）
+    #   ACTIVE       — REDUCE 复用下面既有的 _place_order/portfolio.
+    #                  reduce_position() 执行路径，与 v2.10 rebalance trim
+    #                  完全一致，不新增下单函数
+    # 单个symbol出错只记日志，不中断整个pass（与本函数其它区块一致）。见
+    # position_manager/ 包 docstring。
+    if config.POSITION_MANAGER_V31_MODE != position_manager.MODE_OFF:
+        for code, pos in list(portfolio.data["positions"].items()):
+            if pos.get("strategy") == "core_etf":
+                continue
+            try:
+                result = results.get(code, {})
+                price = result.get("current_price") or get_price(code)
+                if price <= 0:
+                    continue
+                current_atr = result.get("atr") or pos.get("entry_atr")
+
+                rule_based_score = pos.get("total_score")
+                if rule_based_score is None:
+                    rule_based_score = pos.get("signal_strength", 0.5) * 100.0
+                conf_result, conf_detail = confidence_score.gather_and_score(
+                    code=code, rule_based_score=rule_based_score, sig=result,
+                    tracker=tracker, execution=execution_label,
+                )
+                pm_confidence = conf_result.confidence_score
+                pm_hmm_state = conf_detail.get("hmm_state")
+
+                pm_risk_flags = []
+                if macro_block:
+                    pm_risk_flags.append("MACRO_BLOCK")
+                if portfolio.is_headwind():
+                    pm_risk_flags.append("HEADWIND")
+
+                pm_context = position_manager.build_context(
+                    code=code, pos=pos, current_price=price,
+                    current_atr=current_atr, confidence=pm_confidence,
+                    hmm_state=pm_hmm_state, portfolio=portfolio,
+                    risk_flags=pm_risk_flags,
+                )
+                if pm_context is None:
+                    continue
+
+                pm_decision = position_manager.evaluate(pm_context)
+
+                pm_execution = position_manager.EXECUTION_SKIPPED_OBSERVATION
+                if (config.POSITION_MANAGER_V31_MODE == position_manager.MODE_ACTIVE
+                        and pm_decision.action == "REDUCE" and pm_decision.reduction_qty > 0):
+                    pm_fill = _place_order(
+                        code=code, side="SELL", qty=pm_decision.reduction_qty,
+                        price=price, trd_env=trd_env, env_label=env_label,
+                        confirmed=confirmed,
+                    )
+                    if confirmed and pm_fill["dealt_qty"] > 0:
+                        exit_price = pm_fill["dealt_avg_price"] or price
+                        portfolio.reduce_position(
+                            code, exit_price, int(pm_fill["dealt_qty"]),
+                            reason="POSITION_MANAGER_V31")
+                        pm_execution = position_manager.EXECUTION_EXECUTED
+
+                position_manager.log_decision(pm_context, pm_decision, execution=pm_execution)
+
+                if pm_decision.action == "REDUCE":
+                    alert.log(
+                        f"position_manager: {code} target={pm_decision.target_position_pct:.0f}% "
+                        f"(current={pm_decision.current_position_pct:.0f}%) "
+                        f"decision=REDUCE {pm_decision.reduction_qty}股 "
+                        f"execution={pm_execution} — {pm_decision.reason}")
+            except Exception as exc:
+                alert.log(f"position_manager: evaluation failed for {code} — {exc}")
 
     # ── v2.13 QQQ Core Recovery / Reclaim (Phase 2.1, Observation Mode) ──────
     # 解决"QQQ重新站上MA200后，能否在普通仓位挤占下拿回25%目标仓位"——只
