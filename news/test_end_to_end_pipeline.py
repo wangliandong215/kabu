@@ -20,6 +20,7 @@ from news.news_sources import Source
 from risk.portfolio_risk_engine import PortfolioRiskEngine
 from risk.portfolio_state import PortfolioState
 from risk.risk_decision import OrderIntent, RiskStatus
+import test_support
 
 
 class TestEndToEndPipeline(unittest.TestCase):
@@ -112,6 +113,15 @@ class TestEndToEndPipeline(unittest.TestCase):
         order = OrderIntent(code="US.NVDA", side="BUY", qty=10, price=100.0)
         decision = PortfolioRiskEngine().evaluate(order, state)
         self.assertNotEqual(decision.status, RiskStatus.BLOCK)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

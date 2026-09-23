@@ -8,6 +8,7 @@ import unittest
 import config
 from exit_engine import break_even_signal
 from exit_engine._fixtures import make_context
+import test_support
 
 
 class BreakEvenSignalTestCase(unittest.TestCase):
@@ -62,6 +63,15 @@ class BreakEvenSignalTestCase(unittest.TestCase):
         ctx = make_context(entry_price=entry, peak_price=peak, current_price=current)
         sig = break_even_signal.evaluate(ctx)
         self.assertTrue(sig.triggered)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

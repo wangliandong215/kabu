@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from exit_engine import state_store
+import test_support
 
 
 class StateStoreTestCase(unittest.TestCase):
@@ -69,6 +70,15 @@ class StateStoreTestCase(unittest.TestCase):
         state_store._STORE_PATH.write_text("not valid json{{{", encoding="utf-8")
         data = state_store._load()
         self.assertEqual(data, {"symbols": {}})
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

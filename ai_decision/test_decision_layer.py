@@ -15,6 +15,7 @@ from ai_decision.llm.base import AIDecisionProvider
 from ai_decision.llm.mock_provider import MockAIDecisionProvider
 from ai_decision.llm.null_provider import NullAIDecisionProvider
 from ai_decision.schema import AIDecision, AIDecisionContext
+import test_support
 
 
 class _RaisingProvider(AIDecisionProvider):
@@ -59,6 +60,15 @@ class TestAIDecisionLayer(unittest.TestCase):
         layer = AIDecisionLayer(mode="ACTIVE")   # not a valid mode — see module docstring
         result = layer.decide(self._ctx())
         self.assertIsNone(result)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

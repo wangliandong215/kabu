@@ -9,6 +9,7 @@ import unittest
 import config
 from exit_engine import trend_signal
 from exit_engine._fixtures import make_bars, make_context
+import test_support
 
 _UP = [100.0 + i for i in range(30)]
 _DOWN = [130.0 - i for i in range(30)]
@@ -89,6 +90,15 @@ class TrendSignalTestCase(unittest.TestCase):
         sig = trend_signal.evaluate(ctx)
         self.assertTrue(sig.triggered)
         self.assertEqual(sig.points, 1.0)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ import unittest
 from ai_decision.llm.mock_provider import MockAIDecisionProvider
 from ai_decision.llm.null_provider import NullAIDecisionProvider
 from ai_decision.schema import AIAction, AIDecision
+import test_support
 
 
 class TestNullProvider(unittest.TestCase):
@@ -60,6 +61,15 @@ class TestMockProvider(unittest.TestCase):
             result = MockAIDecisionProvider().decide(context)
             self.assertGreaterEqual(result.confidence, 0.0)
             self.assertLessEqual(result.confidence, 1.0)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

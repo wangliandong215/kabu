@@ -4,6 +4,7 @@ import unittest
 import config
 from position_manager import drawdown_reduction
 from position_manager.models import PositionManagementContext
+import test_support
 
 
 def _ctx(peak_price, current_price):
@@ -50,6 +51,15 @@ class TestDrawdownReduction(unittest.TestCase):
         # code path this module has no knowledge of.
         sig = drawdown_reduction.evaluate(_ctx(100.0, 80.0))  # -20%
         self.assertLess(sig.reduction_pct, 1.0)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

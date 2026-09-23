@@ -12,6 +12,7 @@ from pathlib import Path
 
 import ai_decision.audit_log as audit_log
 from ai_decision.schema import AIAction, AIDecision, AIDecisionContext
+import test_support
 
 
 class TestLogDecision(unittest.TestCase):
@@ -51,6 +52,15 @@ class TestLogDecision(unittest.TestCase):
             audit_log.log_decision(ctx, decision)
         except Exception as exc:
             self.fail(f"log_decision() raised {exc!r}, expected fail-silent")
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ import unittest
 from regime.models import (MarketContext, REGIME_BULL, REGIME_NEUTRAL,
                             REGIME_BEAR, REGIME_CRASH, SOURCE_RULES)
 from regime.rule_provider import RuleRegimeProvider
+import test_support
 
 
 class TestRuleRegimeProvider(unittest.TestCase):
@@ -84,6 +85,15 @@ class TestRuleRegimeProvider(unittest.TestCase):
                     seen_regimes.add(result.regime)
         self.assertNotIn(REGIME_NEUTRAL, seen_regimes)
         self.assertEqual(seen_regimes, {REGIME_CRASH, REGIME_BEAR, REGIME_BULL})
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

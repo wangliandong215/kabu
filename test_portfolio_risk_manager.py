@@ -15,6 +15,7 @@ import unittest
 import config
 from portfolio.broker_state import BrokerPosition, BrokerState
 from risk import portfolio_risk_manager as prm
+import test_support
 
 
 def _bstate(positions: dict, cash: float, total_assets: float, long_mv: float) -> BrokerState:
@@ -653,6 +654,15 @@ class TestRebalanceLock(unittest.TestCase):
             json.dump(record, f)
         self.assertEqual(prm.try_acquire_rebalance_lock(), prm.LOCK_STALE)
         self.assertTrue(self._path.exists(), "a stale lock must not be auto-deleted")
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import config
 from position_manager import volatility_reduction
 from position_manager.models import (PositionManagementContext, VOLATILITY_ELEVATED,
                                       VOLATILITY_HIGH, VOLATILITY_NORMAL)
+import test_support
 
 
 def _ctx(atr_pct):
@@ -51,6 +52,15 @@ class TestVolatilityReduction(unittest.TestCase):
     def test_never_hard_exits_on_high_vol(self):
         sig = volatility_reduction.evaluate(_ctx(0.20))  # extreme
         self.assertLess(sig.reduction_pct, 1.0)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

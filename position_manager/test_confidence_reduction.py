@@ -4,6 +4,7 @@ import unittest
 import config
 from position_manager import confidence_reduction
 from position_manager.models import PositionManagementContext
+import test_support
 
 
 def _ctx(confidence, confidence_baseline):
@@ -55,6 +56,15 @@ class TestConfidenceReduction(unittest.TestCase):
         self.assertTrue(sig.triggered)
         self.assertLess(sig.reduction_pct, config.CONF_DROP_MODERATE_REDUCTION)
         self.assertGreater(sig.reduction_pct, 0.0)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

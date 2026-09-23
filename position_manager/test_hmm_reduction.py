@@ -4,6 +4,7 @@ import unittest
 import config
 from position_manager import hmm_reduction
 from position_manager.models import PositionManagementContext
+import test_support
 
 
 def _ctx(hmm_state, hmm_state_baseline):
@@ -53,6 +54,15 @@ class TestHmmReduction(unittest.TestCase):
         sig = hmm_reduction.evaluate(_ctx("HMM_BULL", "HMM_BEAR"))
         self.assertFalse(sig.triggered)
         self.assertEqual(sig.reduction_pct, 0.0)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from pathlib import Path
 import config
 from risk import qqq_core_recovery as qcr
 from risk.portfolio_risk_manager import RebalanceOrder
+import test_support
 
 
 class ComputeShortfallTestCase(unittest.TestCase):
@@ -291,6 +292,15 @@ class StateIOTestCase(unittest.TestCase):
             qcr.load_state()
         except Exception as exc:
             self.fail(f"load_state() must never raise, got {exc!r}")
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

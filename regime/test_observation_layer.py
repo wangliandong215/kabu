@@ -15,6 +15,7 @@ from pathlib import Path
 import regime as regime_pkg
 from regime.models import MarketContext, MarketRegime, REGIME_BULL, SOURCE_RULES
 from regime.provider import RegimeProvider
+import test_support
 
 
 _CTX = MarketContext(weather_code=2, qqq_above_ma=True, drawdown_halt=False)
@@ -89,6 +90,15 @@ class TestEvaluateAndLog(unittest.TestCase):
         regime_pkg.evaluate_and_log(_CTX)
         lines = regime_pkg.REGIME_LOG_PATH.read_text(encoding="utf-8").strip().splitlines()
         self.assertEqual(len(lines), 2)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

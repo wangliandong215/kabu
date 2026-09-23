@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from research import position_manager_v31_review as review
+import test_support
 
 
 class TestLoadLog(unittest.TestCase):
@@ -100,6 +101,15 @@ class TestSummarize(unittest.TestCase):
         stats = review.summarize(rows)
         self.assertEqual(stats["target_below_zero_count"], 1)
         self.assertEqual(stats["target_exceeds_current_count"], 1)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

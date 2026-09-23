@@ -21,6 +21,7 @@ from engine.trade_tracker import (TradeTracker, build_regime_ctx,
                                    EXIT_TAKE_PROFIT, EXIT_STRATEGY_SIGNAL,
                                    EXIT_REGIME_BREAK, EXIT_REPLACED,
                                    EXIT_UNKNOWN)
+import test_support
 
 N = 90  # comfortably past MRD's min-bars warmup gate (see test_market_regime.py)
 
@@ -1029,6 +1030,15 @@ class TestBuildRegimeCtxPreferringHmm(unittest.TestCase):
                                 }):
             ctx = build_regime_ctx_preferring_hmm("US.AAPL", df=None)
         self.assertIsNone(ctx)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

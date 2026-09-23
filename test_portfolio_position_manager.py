@@ -15,6 +15,7 @@ from pathlib import Path
 
 import config
 from risk import portfolio_position_manager as ppm
+import test_support
 
 
 class TestClassifyMarketRegime(unittest.TestCase):
@@ -124,6 +125,15 @@ class TestLogAttempt(unittest.TestCase):
                              allowed_qty=1, applied_qty=1, price=100.0, action="ALLOW", enabled=False)
         except Exception as exc:
             self.fail(f"log_attempt() must never raise, got {exc!r}")
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

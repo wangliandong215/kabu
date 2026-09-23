@@ -16,6 +16,7 @@ import config
 import exit_engine
 from exit_engine import state_store
 from exit_engine._fixtures import make_bars
+import test_support
 
 
 class ExitEngineTestCase(unittest.TestCase):
@@ -181,6 +182,15 @@ class ExitEngineTestCase(unittest.TestCase):
             current_atr=1.0, trade_id="US.TEST_x", market_regime=1)
         result = exit_engine.evaluate(ctx)
         self.assertIsInstance(result.pressure_score, float)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

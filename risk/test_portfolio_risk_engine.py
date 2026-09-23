@@ -17,6 +17,7 @@ import risk.portfolio_risk_engine as portfolio_risk_engine
 from risk.portfolio_risk_engine import PortfolioRiskEngine, evaluate_order
 from risk.portfolio_state import PortfolioState, PositionSnapshot
 from risk.risk_decision import OrderIntent, RiskStatus, allow
+import test_support
 
 
 def _pos(code, qty, market_val, total_assets, sector="semiconductor", is_core=False):
@@ -188,6 +189,15 @@ class TestSellNeverBlockedByHardLimits(unittest.TestCase):
         decision = PortfolioRiskEngine().evaluate(order, self._state())
         self.assertEqual(decision.status, RiskStatus.BLOCK)
         self.assertTrue(decision.violations)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

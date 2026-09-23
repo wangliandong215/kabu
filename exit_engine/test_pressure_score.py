@@ -9,6 +9,7 @@ import unittest
 import config
 from exit_engine import pressure_score
 from exit_engine.models import TIER_CRITICAL, TIER_HIGH, TIER_LOW, TIER_MEDIUM, SignalReading
+import test_support
 
 
 def _reading(name, enabled=True, triggered=False, points=0.0):
@@ -84,6 +85,15 @@ class AggregateTestCase(unittest.TestCase):
         score, tier, _ = pressure_score.aggregate(signals)
         self.assertEqual(score, config.EXIT_PRESSURE_HIGH_THRESHOLD)
         self.assertEqual(tier, TIER_HIGH)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

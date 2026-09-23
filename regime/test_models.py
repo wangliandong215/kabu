@@ -8,6 +8,7 @@ import unittest
 from regime.models import (MarketContext, MarketRegime, VALID_REGIMES,
                             REGIME_BULL, REGIME_NEUTRAL, REGIME_BEAR, REGIME_CRASH,
                             SOURCE_RULES, SOURCE_LLM)
+import test_support
 
 
 class TestMarketRegimeValidation(unittest.TestCase):
@@ -59,6 +60,15 @@ class TestMarketContext(unittest.TestCase):
         ctx = MarketContext(weather_code=None, qqq_above_ma=None, drawdown_halt=False)
         self.assertIsNone(ctx.weather_code)
         self.assertIsNone(ctx.qqq_above_ma)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

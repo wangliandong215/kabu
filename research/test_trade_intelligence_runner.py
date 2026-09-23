@@ -13,6 +13,7 @@ from pathlib import Path
 
 from engine.trade_tracker import TradeTracker
 from research.trade_intelligence_runner import refresh
+import test_support
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _RESEARCH_DIR = _REPO_ROOT / "research"
@@ -105,6 +106,15 @@ class TradeIntelligenceRunnerTestCase(unittest.TestCase):
         main_path = _REPO_ROOT / "main.py"
         if main_path.exists():
             self.assertNotIn("trade_intelligence", main_path.read_text(encoding="utf-8"))
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

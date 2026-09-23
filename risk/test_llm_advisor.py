@@ -15,6 +15,7 @@ from risk.llm.null_provider import NullLLMProvider
 from risk.llm_advisor import LLMRiskAdvisor, get_llm_provider
 from risk.portfolio_state import PortfolioState
 from risk.risk_decision import OrderIntent, RiskDecision, RiskStatus
+import test_support
 
 
 class _RaisingProvider(LLMProvider):
@@ -70,6 +71,15 @@ class TestLLMRiskAdvisor(unittest.TestCase):
                          PortfolioState(), decision)
         self.assertEqual(decision.status, RiskStatus.ALLOW)
         self.assertTrue(decision.allowed)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

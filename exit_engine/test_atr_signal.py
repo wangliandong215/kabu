@@ -8,6 +8,7 @@ import unittest
 import config
 from exit_engine import atr_signal
 from exit_engine._fixtures import make_context
+import test_support
 
 
 class AtrSignalTestCase(unittest.TestCase):
@@ -72,6 +73,15 @@ class AtrSignalTestCase(unittest.TestCase):
                             current_atr=1.0, entry_atr=None)
         sig = atr_signal.evaluate(ctx)
         self.assertIsNone(sig.extra["volatility_expansion"])
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

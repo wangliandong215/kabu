@@ -8,6 +8,7 @@ import unittest
 import config
 from exit_engine import trailing_stop_signal
 from exit_engine._fixtures import make_context
+import test_support
 
 
 class TrailingStopSignalTestCase(unittest.TestCase):
@@ -68,6 +69,15 @@ class TrailingStopSignalTestCase(unittest.TestCase):
                             current_price=95.0)
         sig = trailing_stop_signal.evaluate(ctx)
         self.assertAlmostEqual(sig.extra["trailing_stop_price"], max(sig.extra["candidates"].values()))
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

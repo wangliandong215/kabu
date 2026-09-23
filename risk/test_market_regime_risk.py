@@ -11,6 +11,7 @@ import config
 from risk.market_regime_risk import check
 from risk.portfolio_state import PortfolioState, PositionSnapshot
 from risk.risk_decision import OrderIntent, RiskStatus
+import test_support
 
 
 def _pos(code, qty=10, market_val=10_000):
@@ -66,6 +67,15 @@ class TestMarketRegimeRisk(unittest.TestCase):
         order = OrderIntent(code="US.NVDA", side="SELL", qty=10, price=100.0)
         _, decision = check(order, state)
         self.assertEqual(decision.status, RiskStatus.ALLOW)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

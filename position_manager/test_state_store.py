@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from position_manager import state_store
+import test_support
 
 
 class TestStateStore(unittest.TestCase):
@@ -53,6 +54,15 @@ class TestStateStore(unittest.TestCase):
     def test_update_on_unknown_symbol_is_noop(self):
         result = state_store.update("US.UNKNOWN", peak_price=100.0)
         self.assertEqual(result, {})
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

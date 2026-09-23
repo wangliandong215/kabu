@@ -9,6 +9,7 @@ import unittest
 import pandas as pd
 
 from exit_engine import indicators
+import test_support
 
 
 def _bars(closes, highs=None, lows=None, volumes=None):
@@ -126,6 +127,15 @@ class AvgVolumeTestCase(unittest.TestCase):
     def test_avg_volume_none_when_all_zero(self):
         df = _bars([1.0, 1.0, 1.0], volumes=[0, 0, 0])
         self.assertIsNone(indicators.avg_volume(df, lookback=3, exclude_last=False))
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

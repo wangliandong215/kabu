@@ -16,6 +16,7 @@ from regime.models import MarketContext, MarketRegime, REGIME_BULL, REGIME_CRASH
 from regime.rule_provider import RuleRegimeProvider
 from regime.llm_provider import LocalLLMRegimeProvider
 from regime.provider import RegimeProvider
+import test_support
 
 
 _CTX = MarketContext(weather_code=2, qqq_above_ma=True, drawdown_halt=False)
@@ -173,6 +174,15 @@ class TestIsValid(unittest.TestCase):
         self.assertFalse(_is_valid({"regime": "BULL"}))
         self.assertFalse(_is_valid(None))
         self.assertFalse(_is_valid("BULL"))
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

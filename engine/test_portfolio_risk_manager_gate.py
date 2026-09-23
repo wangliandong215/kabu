@@ -557,5 +557,14 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
                               "buy order must never exceed real broker cash")
 
 
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
+
+
 if __name__ == "__main__":
     unittest.main()

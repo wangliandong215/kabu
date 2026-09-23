@@ -8,6 +8,7 @@ import unittest
 import config
 from exit_engine import ema_signal
 from exit_engine._fixtures import make_bars, make_context
+import test_support
 
 
 class EmaSignalTestCase(unittest.TestCase):
@@ -60,6 +61,15 @@ class EmaSignalTestCase(unittest.TestCase):
         self.assertTrue(sig.triggered)
         self.assertEqual(sig.state, ema_signal.STATE_BEARISH_CROSS)
         self.assertAlmostEqual(sig.points, config.EXIT_EMA_CROSS_POINTS)
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

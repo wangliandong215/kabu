@@ -4,6 +4,7 @@ import unittest
 import config
 import position_manager
 from position_manager.models import PositionManagementContext
+import test_support
 
 
 def _ctx(**overrides):
@@ -131,6 +132,15 @@ class TestPositionManagerAggregation(unittest.TestCase):
                     confidence=79.0, confidence_baseline=82.0)  # 3-point drop, under MINOR anyway
         decision = position_manager.evaluate(ctx)
         self.assertEqual(decision.action, "HOLD")
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import unittest
 from position_manager import llm_interface
 from position_manager.models import PositionManagerDecision
 from position_manager.test_position_manager import _ctx
+import test_support
 
 
 def _decision():
@@ -50,6 +51,15 @@ class TestLLMInterface(unittest.TestCase):
             self.assertIsNone(llm_interface.review_position(_ctx(), _decision()))
         finally:
             config.POSITION_LLM_MODE = original
+
+
+def setUpModule():
+    # Keep this suite off the live C:\KabuData state/log files (see test_support.py).
+    test_support.isolate_live_state()
+
+
+def tearDownModule():
+    test_support.restore_live_state()
 
 
 if __name__ == "__main__":
