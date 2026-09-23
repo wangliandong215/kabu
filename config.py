@@ -1262,6 +1262,11 @@ DINGTALK_WEBHOOK: str = os.getenv("KABU_DINGTALK_WEBHOOK", "")
 # the bot. Create/remove with: New-Item / Remove-Item on this path.
 NOTIFY_MUTE_FILE: str = r"C:\KabuData\notify_paused.flag"
 
+# Last-pushed state per key for notify/alert.py:warn_on_state_change() — a
+# persistent condition (e.g. portfolio risk tier staying at PAUSE_NEW for
+# weeks) is pushed once when it starts, not once per day / per restart.
+NOTIFY_STATE_FILE: str = r"C:\KabuData\notify_state.json"
+
 # Set env vars KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID to receive Telegram alerts.
 TELEGRAM_BOT_TOKEN: str = os.getenv("KABU_TELEGRAM_BOT_TOKEN", "")
 

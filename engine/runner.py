@@ -391,14 +391,17 @@ def run_once(
                       f"  总资产${assessment.total_assets:,.0f}")
 
             executed_orders = []
+            # 手机推送只在档位变化时推一次（见notify/alert.py:warn_on_state_change，
+            # 上次档位持久化到文件、重启不丢）——长期满仓停在PAUSE_NEW时不再
+            # 每天推一遍同样的内容。按env分key，SIMULATE和实盘互不干扰。
+            tier_key = f"portfolio_risk_{env_label}"
             if assessment.tier in (portfolio_risk_manager.TIER_PAUSE, portfolio_risk_manager.TIER_WARNING):
                 risk_block = f"PORTFOLIO_RISK_{assessment.tier}: exposure {assessment.exposure_pct:.1%}"
-                # 手机推送每天每档最多一条（见notify/alert.py:warn_state）——
-                # tier不变的话，同一档位反复触发不用每轮--interval都推一次。
-                alert.warn_state(f"portfolio_risk_{assessment.tier}",
-                                  risk_block + " — 暂停新增买入，不强制卖出")
+                alert.warn_on_state_change(tier_key, assessment.tier,
+                                           risk_block + " — 暂停新增买入，不强制卖出")
             elif assessment.tier == portfolio_risk_manager.TIER_EMERGENCY:
                 risk_block = f"PORTFOLIO_RISK_EMERGENCY: exposure {assessment.exposure_pct:.1%}"
+                alert.warn_on_state_change(tier_key, assessment.tier, None)
                 alert.error(risk_block + f" — 触发强制再平衡，目标回落至"
                             f"{config.PORTFOLIO_RISK_REBALANCE_TARGET:.0%}")
                 # v2.10.1: 自动循环里的再平衡，哪怕这一轮confirmed=True，
@@ -414,6 +417,11 @@ def run_once(
                     portfolio_state=risk_state,
                 )
                 remaining_broker_cash += sum(o["price"] * o["sell_qty"] for o in executed_orders)
+            elif assessment.tier == portfolio_risk_manager.TIER_NORMAL:
+                prev_tier = alert.warn_on_state_change(tier_key, assessment.tier, None)
+                if prev_tier in (portfolio_risk_manager.TIER_PAUSE, portfolio_risk_manager.TIER_WARNING,
+                                 portfolio_risk_manager.TIER_EMERGENCY):
+                    alert.info(f"组合仓位回落至{assessment.exposure_pct:.1%}（原{prev_tier}），恢复新增买入")
 
             portfolio_risk_manager.log_snapshot(assessment, diffs, executed_orders)
 

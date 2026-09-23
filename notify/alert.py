@@ -11,12 +11,14 @@ written to a rotating file under config.LOG_DIR — the terminal/Telegram
 history disappears when a console closes or a phone notification scrolls
 away, but the file survives a reboot so past runs stay traceable.
 """
+import json
 import logging
 import logging.handlers
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import config
 
@@ -64,6 +66,14 @@ def _emit(level: str, msg: str) -> None:
     _push_all(msg, prefix="")
 
 
+def _in_test_run() -> bool:
+    # `python -m unittest ...` rewrites sys.argv[0] to the literal
+    # "python -m unittest" (see unittest/__main__.py).
+    entry = Path(sys.argv[0]).name if sys.argv else ""
+    return (entry.startswith("test_") or entry.endswith("-m unittest")
+            or "PYTEST_CURRENT_TEST" in os.environ)
+
+
 def _is_muted() -> bool:
     """True while config.NOTIFY_MUTE_FILE exists — checked fresh on every
     push so a running process can be paused/resumed by touching/deleting the
@@ -81,8 +91,7 @@ def _is_muted() -> bool:
     silently muted itself for its entire lifetime — no exception, no log
     line, nothing. Discovered 2026-09-22 when a restarted main.py silently
     dropped the market-close and market-open push notifications."""
-    entry = Path(sys.argv[0]).name if sys.argv else ""
-    if entry.startswith("test_") or "PYTEST_CURRENT_TEST" in os.environ:
+    if _in_test_run():
         return True
     mute_file = getattr(config, "NOTIFY_MUTE_FILE", "")
     return bool(mute_file) and Path(mute_file).exists()
@@ -177,21 +186,54 @@ def warn_skip(code: str, msg: str) -> None:
     _push_all(msg, prefix="")
 
 
-_state_pushed_today: dict = {}  # key -> "YYYY-MM-DD" of last push
+_test_state: dict = {}   # stands in for NOTIFY_STATE_FILE during test runs
 
 
-def warn_state(key: str, msg: str) -> None:
-    """Like warn(), but pushed to DingTalk/Telegram at most once per calendar
-    day per key — for a persistent state condition (e.g. portfolio risk tier
-    staying at PAUSE_NEW all day) that would otherwise repush every
-    --interval scan (e.g. every 5 minutes) while the state is unchanged."""
-    print(f"[{_ts()}] [WARN ] {msg}")
-    _logger.warning(msg)
-    today = datetime.now().strftime("%Y-%m-%d")
-    if _state_pushed_today.get(key) == today:
-        return
-    _state_pushed_today[key] = today
-    _push_all(msg, prefix="")
+def _load_states() -> dict:
+    if _in_test_run():
+        return _test_state
+    try:
+        with open(config.NOTIFY_STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_states(states: dict) -> None:
+    if _in_test_run():
+        return   # _load_states() already returned the live _test_state dict
+    try:
+        path = Path(config.NOTIFY_STATE_FILE)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(states, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as e:
+        _logger.warning(f"notify_state save failed: {e!r}")
+
+
+def warn_on_state_change(key: str, state: str, msg: Optional[str]) -> Optional[str]:
+    """For a persistent state condition (e.g. portfolio risk tier staying at
+    PAUSE_NEW for weeks while the account is fully invested): msg is printed/
+    logged as WARN on every call, but pushed to DingTalk/Telegram only when
+    state differs from the last state recorded for key. The last state lives
+    in config.NOTIFY_STATE_FILE, so it survives a main.py restart (the old
+    once-per-day in-memory dedupe repushed daily and after every restart).
+    msg=None just records state. Returns the previous state (None if never
+    recorded) so the caller can announce a recovery transition itself."""
+    if msg is not None:
+        print(f"[{_ts()}] [WARN ] {msg}")
+        _logger.warning(msg)
+    states = _load_states()
+    prev = states.get(key)
+    if prev == state:
+        return prev
+    states[key] = state
+    _save_states(states)
+    if msg is not None:
+        _push_all(msg, prefix="")
+    return prev
 
 
 # ── Exit reason display mapping ───────────────────────────────────────────────
