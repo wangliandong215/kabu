@@ -42,6 +42,7 @@ from portfolio.tracker import Portfolio
 from risk import guard, sizing, dynamic_sizing, portfolio_risk_manager, portfolio_position_manager, qqq_core_recovery
 from engine import confidence_score
 import position_manager
+import exit_engine
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash, normalize_exit_reason,
@@ -778,6 +779,42 @@ def run_once(
                         f"execution={pm_execution} — {pm_decision.reason}")
             except Exception as exc:
                 alert.log(f"position_manager: evaluation failed for {code} — {exc}")
+
+    # ── 2b.6. V3.2-A Minute Exit Engine (分钟级卖出引擎，Observation Only) ───
+    # 对每个非core_etf持仓用1m/5m/15m分钟K线计算Exit Pressure Score并写日志
+    # （exit_engine_v32_log.jsonl）——只计算+记录，绝不下单、绝不调用
+    # portfolio.close_position/reduce_position、绝不影响上面exit-check循环
+    # 里的reason/strat_signal，也不读macro_block/risk_block。见exit_engine/
+    # 包docstring。config.ENABLE_V3_2=False（当前默认）时整段跳过，不fetch、
+    # 不计算、不写日志。fetch_kline用"1m"/"5m"/"15m"短字符串约定（见
+    # data/fetcher.py::_ktype_enum），跟本函数自己的ktype/bars参数（驱动的是
+    # 日线策略扫描）完全独立。单个symbol出错只记日志，不中断整个pass（与
+    # 本函数其它区块一致）。
+    if config.ENABLE_V3_2:
+        for code, pos in list(portfolio.data["positions"].items()):
+            if pos.get("strategy") == "core_etf":
+                continue
+            try:
+                from data.fetcher import fetch_kline as _ee_fetch_kline
+                price = results.get(code, {}).get("current_price") or get_price(code)
+                if price <= 0:
+                    continue
+                bars_1m = _ee_fetch_kline(code, ktype="1m")
+                bars_5m = _ee_fetch_kline(code, ktype="5m")
+                bars_15m = _ee_fetch_kline(code, ktype="15m")
+                ee_context = exit_engine.build_context(
+                    code=code, pos=pos, current_price=price,
+                    bars_1m=bars_1m, bars_5m=bars_5m, bars_15m=bars_15m,
+                    current_atr=results.get(code, {}).get("atr") or pos.get("entry_atr"),
+                    trade_id=_trade_id(code, pos.get("entry_time")),
+                    market_regime=weather_code,
+                )
+                if ee_context is None:
+                    continue
+                ee_result = exit_engine.evaluate(ee_context)
+                exit_engine.log_diagnostics(ee_context, ee_result)
+            except Exception as exc:
+                alert.log(f"exit_engine: evaluation failed for {code} — {exc}")
 
     # ── v2.13 QQQ Core Recovery / Reclaim (Phase 2.1, Observation Mode) ──────
     # 解决"QQQ重新站上MA200后，能否在普通仓位挤占下拿回25%目标仓位"——只

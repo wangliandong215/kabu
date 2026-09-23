@@ -1297,3 +1297,89 @@ PM_MIN_REDUCTION_PCT: float = 5.0
 # NotImplementedError，并被 position_manager/llm_interface.py 安全吞掉——见
 # regime/llm_provider.py 的同款先例。
 POSITION_LLM_MODE: str = "OFF"
+
+# ── V3.2-A Minute Exit Engine（分钟级卖出引擎，Observation Only）───────────
+# 唯一职责：对每个非core_etf的持仓，每个pass用1m/5m/15m分钟K线计算一组独立的
+# Exit信号（VWAP/EMA/多周期趋势/Volume/时间段/ATR/Trailing Stop/Break Even），
+# 汇总成一个Exit Pressure Score（LOW/MEDIUM/HIGH/CRITICAL），写入
+# exit_engine_v32_log.jsonl——不改变Entry/既有Exit/Dynamic Position Sizing/
+# Position Manager/Portfolio Risk Manager/QQQ Core Recovery/Emergency
+# Rebalance的任何既有规则，也绝不下单。见 exit_engine/ 包 docstring。
+#
+# ENABLE_V3_2=False 时整个模块不计算、不导入、不写日志，等同没有这个功能。
+# 各信号独立开关是为了V3.2-B阶段可以一次只验证一个信号（其余保持关闭）。
+# 首次上线（本次提交）全部默认False——需要人工确认后再逐个打开收集数据。
+ENABLE_V3_2: bool = False
+
+ENABLE_VWAP_EXIT: bool = False
+ENABLE_EMA_EXIT: bool = False
+ENABLE_1M_TREND_EXIT: bool = False
+ENABLE_5M_TREND_EXIT: bool = False
+ENABLE_15M_TREND_EXIT: bool = False
+ENABLE_VOLUME_EXHAUSTION: bool = False
+ENABLE_HEAVY_SELLING: bool = False
+ENABLE_OPENING_WEAKNESS: bool = False
+ENABLE_AFTERNOON_FADE: bool = False
+ENABLE_ATR_EXIT: bool = False
+ENABLE_TRAILING_STOP: bool = False
+ENABLE_BREAK_EVEN: bool = False
+ENABLE_TIME_EXIT: bool = False
+
+# Exit Pressure Score 分档阈值（累加分数达到即进入该档）——V1，未经数据验证，
+# 见 exit_engine/pressure_score.py docstring，V3.2-B/C 阶段会用真实数据校准。
+EXIT_PRESSURE_MEDIUM_THRESHOLD: float = 3.0
+EXIT_PRESSURE_HIGH_THRESHOLD: float = 6.0
+EXIT_PRESSURE_CRITICAL_THRESHOLD: float = 10.0
+
+# VWAP（exit_engine/vwap_signal.py）
+EXIT_VWAP_POINTS_BASE: float = 1.0
+EXIT_VWAP_POINTS_WIDE: float = 1.0
+EXIT_VWAP_WIDE_DISTANCE_PCT: float = 0.01
+
+# EMA Cross（exit_engine/ema_signal.py，基于5m K线）
+EXIT_EMA_FAST_SPAN: int = 9
+EXIT_EMA_SLOW_SPAN: int = 21
+EXIT_EMA_CROSS_POINTS: float = 2.0
+EXIT_EMA_BELOW_POINTS: float = 1.0
+
+# Multi-Timeframe Trend（exit_engine/trend_signal.py）
+EXIT_TREND_FAST_SPAN: int = 5
+EXIT_TREND_SLOW_SPAN: int = 20
+EXIT_TREND_COMPOUND_BONUS: float = 1.0     # >=2个周期同时DOWN的额外加分
+EXIT_TREND_ALL_DOWN_BONUS: float = 1.0     # 1m+5m+15m全部DOWN的额外加分
+
+# Volume Exhaustion / Heavy Selling（exit_engine/volume_signal.py，基于5m K线）
+EXIT_VOLUME_LOOKBACK: int = 20
+EXIT_VOLUME_EXHAUSTION_RATIO: float = 0.6
+EXIT_VOLUME_EXHAUSTION_POINTS: float = 1.0
+EXIT_HEAVY_SELLING_RATIO: float = 1.5
+EXIT_HEAVY_SELLING_POINTS: float = 2.0
+
+# Opening Weakness / Afternoon Fade / Time Exit（exit_engine/time_signal.py）
+EXIT_OPENING_WINDOW_MINUTES: int = 15
+EXIT_OPENING_WEAKNESS_POINTS: float = 1.0
+EXIT_AFTERNOON_START_MINUTES: int = 240
+EXIT_AFTERNOON_FADE_DRAWDOWN_PCT: float = 0.02
+EXIT_AFTERNOON_FADE_POINTS: float = 1.0
+EXIT_TIME_MAX_HOLDING_DAYS: float = 10.0
+EXIT_TIME_MIN_EXPECTED_GAIN_PCT: float = 0.02
+EXIT_TIME_NO_NEW_HIGH_DAYS: int = 5
+EXIT_TIME_EXIT_POINTS: float = 1.0
+
+# ATR Stop / Volatility Expansion（exit_engine/atr_signal.py）
+EXIT_ATR_STOP_MULT: float = 2.5
+EXIT_ATR_STOP_POINTS: float = 2.0
+EXIT_ATR_EXPANSION_RATIO: float = 1.5
+EXIT_ATR_EXPANSION_POINTS: float = 1.0
+
+# Trailing Stop（exit_engine/trailing_stop_signal.py，假设性，不驱动真实下单）
+EXIT_TRAILING_FIXED_PCT: float = 0.08
+EXIT_TRAILING_ATR_MULT: float = 3.0
+EXIT_TRAILING_PROFIT_ACTIVATION_PCT: float = 0.10
+EXIT_TRAILING_PROFIT_LOCK_FRACTION: float = 0.5
+EXIT_TRAILING_STOP_POINTS: float = 2.0
+
+# Break Even（exit_engine/break_even_signal.py）
+EXIT_BREAK_EVEN_ACTIVATION_PCT: float = 0.05
+EXIT_BREAK_EVEN_TOLERANCE_PCT: float = 0.005
+EXIT_BREAK_EVEN_POINTS: float = 1.0
