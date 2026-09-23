@@ -31,10 +31,21 @@ try:
 except (AttributeError, ValueError):
     pass
 
+def _in_test_run() -> bool:
+    # `python -m unittest ...` rewrites sys.argv[0] to the literal
+    # "python -m unittest" (see unittest/__main__.py).
+    entry = Path(sys.argv[0]).name if sys.argv else ""
+    return (entry.startswith("test_") or entry.endswith("-m unittest")
+            or "PYTEST_CURRENT_TEST" in os.environ)
+
+
 _logger = logging.getLogger("kabu")
 _logger.setLevel(logging.INFO)
 _logger.propagate = False
-if not _logger.handlers:   # guard against duplicate handlers on module reload
+# No kabu.log handler during test runs: suites that don't call
+# test_support.mute_alert_file_logging() (news/regime/llm_advisor/...) were
+# still writing fake "US.TEST"/"boom" lines into the live log (2026-09-23).
+if not _logger.handlers and not _in_test_run():   # also guards duplicate handlers on reload
     try:
         log_dir = Path(config.LOG_DIR)
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -64,14 +75,6 @@ def _emit(level: str, msg: str) -> None:
     print(f"[{_ts()}] [{level:5s}] {msg}")
     _logger.log(_LEVEL_MAP.get(level, logging.INFO), msg)
     _push_all(msg, prefix="")
-
-
-def _in_test_run() -> bool:
-    # `python -m unittest ...` rewrites sys.argv[0] to the literal
-    # "python -m unittest" (see unittest/__main__.py).
-    entry = Path(sys.argv[0]).name if sys.argv else ""
-    return (entry.startswith("test_") or entry.endswith("-m unittest")
-            or "PYTEST_CURRENT_TEST" in os.environ)
 
 
 def _is_muted() -> bool:
