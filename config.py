@@ -1186,6 +1186,24 @@ NEWS_ENGINE_WARN_SCORE_THRESHOLD: float = -0.40
     # 新开仓 WARN（不 BLOCK）。跟 RISK_ENGINE 一样，第一阶段 WARN 默认不
     # 影响下单（全局开关仍是 config.RISK_ENGINE_BLOCK_ON_WARN）。
 
+# ── V3.5 AI Decision Layer（2026-09-23）──────────────────────────────────────
+# 在 Portfolio Risk Engine（V3.3）+ News & Event Engine（V3.4）之上新增的综合
+# 判断层：ai_decision/decision_layer.py::AIDecisionLayer.decide() 把
+# market_regime / PortfolioState / RiskDecision / NewsEvent 等已经结构化过的
+# 数据交给 LLM，产出 BUY/HOLD/REDUCE/SKIP + confidence + reasoning，写入独立
+# 的 ai_decision_log.jsonl（不复用 risk_engine_log.jsonl）。第一阶段（本次
+# 提交）Shadow Mode / Research Mode ONLY：AIDecisionLayer 没有被
+# engine/runner.py 任何地方调用——不下单、不修改持仓、不改变 Rule Engine，
+# 跟 risk/llm_advisor.py（V3.3）和 news/integration/risk_adapter.py（V3.4）
+# 刚合入时完全一样的两阶段节奏。接入 engine/runner.py（仍然只做 advisory
+# 记录，不影响 _place_order() 的返回值）是 V3.5 Phase 2，需要先看过
+# ai_decision_log.jsonl 一段时间、确认输出合理之后再做。
+AI_DECISION_MODE: str = "OFF"
+    # OFF（默认，NullAIDecisionProvider，永远返回 SKIP/confidence=0.0）/
+    # SHADOW（MockAIDecisionProvider，今天还没有接真实 LLM 后端）。没有
+    # ACTIVE——AI 在 V3.5 里永远只是 Decision Support，不是 Risk/Rule
+    # Authority，见 ai_decision/decision_layer.py 模块 docstring。
+
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
