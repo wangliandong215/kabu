@@ -1208,10 +1208,30 @@ RESEARCH_OPTIONS_MARKET: str = "US_SECURITY"
 INDICATOR_SHADOW_RSI_OVERSOLD: float = 30.0
 INDICATOR_SHADOW_RSI_OVERBOUGHT: float = 70.0
 
-# ── V2.9 Confidence Score（信号质量评分，观察层）───────────────────────────────
-# 只计算、只记录，不参与BUY/SELL/仓位/风控任何决策——见 engine/confidence_score.py
-# 模块docstring。engine/pipeline.py::build_candidate_pool() 只把结果挂在
-# Candidate.confidence/.confidence_detail上供记录，rank_candidates()排序键
-# 不读取它。关闭时 Candidate.confidence 始终为None，不产生额外DB写入，
-# 用于验证"V2.9开关ON/OFF不改变任何实际Buy/Sell decision"这条集成测试。
+# ── V2.9 Confidence Score（信号质量评分）──────────────────────────────────────
+# 只计算，不参与Entry/Exit/Strategy Score/Candidate Ranking——见
+# engine/confidence_score.py 模块docstring。engine/pipeline.py::
+# build_candidate_pool() 把结果挂在 Candidate.confidence/.confidence_detail
+# 上，rank_candidates()排序键不读取它，BUY/SELL信号本身、评分、排序均不受
+# 影响。v3.0起 Candidate.confidence 会被 risk/dynamic_sizing.py 读取来决定
+# "买多少"（仅限position_scale这一个乘数，不影响是否买/何时卖）——这是v3.0
+# spec明确要求的、对v2.9"observation-only"决策的唯一一处主动放开，见
+# DYNAMIC_POSITION_SIZING_ENABLED。关闭本开关时 Candidate.confidence 始终为
+# None，risk/dynamic_sizing.py 对None的处理是回退到1.0倍（不缩不放，等同
+# V2.x），不会跳过或缩小任何交易，可用于验证"V2.9开关ON/OFF不改变任何实际
+# Buy/Sell decision"这条集成测试仍然成立。
 CONFIDENCE_SCORE_ENABLED: bool = True
+
+# ── V3.0-A Dynamic Position Sizing（动态仓位，Paper/Research Only）──────────
+# 唯一职责：把 Candidate.confidence 换算成 risk/sizing.py::calculate() 已有的
+# position_scale 乘数（该乘数语义是"在qty_by_tier/qty_by_risk/qty_by_strat
+# 三个既有风控上限取min()之后再做一次只缩不放的乘法"——见该函数docstring），
+# 不改变Entry/Exit/Strategy Score/Confidence算法本身/Stop Loss/Take Profit/
+# Portfolio Risk Manager的任何既有规则。映射表见
+# risk/dynamic_sizing.py::confidence_to_position_multiplier()。
+#
+# Phase A 只允许在 Paper/Simulate 环境生效——engine/runner.py 用
+# score_env=="paper" 做硬编码门禁（不是靠这个开关），即使这里被设为True，
+# REAL环境的下单也不会应用这个乘数。要放开到实盘需要独立的V3.0-B产品决策，
+# 而不是简单改这一个bool。
+DYNAMIC_POSITION_SIZING_ENABLED: bool = True

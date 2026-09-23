@@ -431,6 +431,39 @@ class TestLogConfidenceScore(TradeTrackerTestCase):
         df = self.tracker.query_confidence_score()
         self.assertTrue(df.empty)
 
+    def test_v3_dynamic_sizing_columns_round_trip(self):
+        # v3.0-A — see risk/dynamic_sizing.py. Same table/row as the v2.9
+        # confidence columns above; these are additive.
+        trade_id = self._open_trade()
+        self.tracker.log_confidence_score(
+            trade_id=trade_id, rule_based_score=88.0, confidence_score=88.0,
+            sizing_formula_version="v3.0.0", position_multiplier=0.8,
+            base_position=10000.0, requested_position=8000.0,
+            risk_adjusted_position=8000.0, final_position=7998.4,
+            skip_reason=None,
+        )
+        row = self._raw("SELECT * FROM trade_confidence_score WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertEqual(row["sizing_formula_version"], "v3.0.0")
+        self.assertAlmostEqual(row["position_multiplier"], 0.8)
+        self.assertAlmostEqual(row["base_position"], 10000.0)
+        self.assertAlmostEqual(row["requested_position"], 8000.0)
+        self.assertAlmostEqual(row["final_position"], 7998.4)
+        self.assertIsNone(row["skip_reason"])
+
+        df = self.tracker.query_confidence_score()
+        self.assertAlmostEqual(df.iloc[0]["position_multiplier"], 0.8)
+
+    def test_v3_skip_reason_stored_for_low_confidence(self):
+        trade_id = self._open_trade()
+        self.tracker.log_confidence_score(
+            trade_id=trade_id, rule_based_score=48.0, confidence_score=48.0,
+            position_multiplier=0.0, skip_reason="low_confidence",
+        )
+        row = self._raw("SELECT * FROM trade_confidence_score WHERE trade_id=?",
+                         (trade_id,))[0]
+        self.assertEqual(row["skip_reason"], "low_confidence")
+
 
 class TestLogExitDiagnostics(TradeTrackerTestCase):
     """v2.9.x Exit Diagnostics — observation-only trade-shape classification

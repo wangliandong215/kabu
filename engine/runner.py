@@ -39,7 +39,7 @@ from portfolio import capacity_manager
 from portfolio import broker_state as broker_state_mod
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
-from risk import guard, sizing, portfolio_risk_manager, portfolio_position_manager, qqq_core_recovery
+from risk import guard, sizing, dynamic_sizing, portfolio_risk_manager, portfolio_position_manager, qqq_core_recovery
 from engine.trade_tracker import (TradeTracker, build_regime_ctx_preferring_hmm,
                                    default_parameter_snapshot,
                                    compute_parameter_hash, normalize_exit_reason,
@@ -833,8 +833,10 @@ def run_once(
         trial_scale = (config.TRENDING_EARLY_POSITION_SCALE
                        if entry_strategy == "atr_breakout_early" else 1.0)
         position_scale = trial_scale * cand.score_components["position_scale"]
-        qty = sizing.calculate(
-            portfolio.available_cash(), price, cand.signal_strength,
+
+        sizing_kwargs = dict(
+            available_cash=portfolio.available_cash(), price=price,
+            signal_strength=cand.signal_strength,
             total_capital=portfolio.total_capital(),
             stop_loss_pct=stop_pct,
             kelly_factor=kelly_factor,
@@ -842,9 +844,43 @@ def run_once(
             open_positions=sum(1 for p in portfolio.data["positions"].values()
                                if p.get("strategy") != "core_etf"),
             rsi_val=result.get("rsi14"),
-            position_scale=position_scale,
             market_weather_code=weather_code,
             score_label=cand.score_label,
+        )
+        # requested_qty: what V2.x (no Dynamic Position Sizing) would have
+        # bought — position_scale here is the pre-v3.0 baseline only
+        # (TRENDING_EARLY trial x total-score model), confidence not yet
+        # applied. Always computed, even when the multiplier below turns out
+        # to be 1.0, so the sizing log below always has a same-run baseline
+        # to compare final_qty against (see config.py's V3.0-A section for
+        # why the multiplier is a no-op outside score_env=="paper").
+        requested_qty = sizing.calculate(position_scale=position_scale, **sizing_kwargs)
+
+        # v3.0-A Dynamic Position Sizing — Confidence -> position_scale
+        # multiplier (risk/dynamic_sizing.py). Hard-restricted to paper/
+        # simulated execution (score_env=="paper") regardless of
+        # config.DYNAMIC_POSITION_SIZING_ENABLED — lifting this to real
+        # money is a separate, explicit V3.0-B decision. Only ever
+        # multiplies the ALREADY-capped position_scale above, so it can
+        # only shrink requested_qty further, never bypass the risk/strategy
+        # caps risk/sizing.py::calculate() already applied to compute it.
+        confidence_multiplier = 1.0
+        if config.DYNAMIC_POSITION_SIZING_ENABLED and score_env == "paper":
+            confidence_multiplier = dynamic_sizing.confidence_to_position_multiplier(cand.confidence)
+        qty = (requested_qty if confidence_multiplier == 1.0 else
+               sizing.calculate(position_scale=position_scale * confidence_multiplier, **sizing_kwargs))
+
+        base_position_value = requested_qty * price
+        requested_position_value = base_position_value * confidence_multiplier
+        risk_adjusted_position_value = qty * price
+        skip_reason = "low_confidence" if confidence_multiplier == 0.0 else None
+        alert.log(
+            f"dynamic_sizing: {code} confidence={cand.confidence} "
+            f"multiplier={confidence_multiplier:.2f} "
+            f"base_position={base_position_value:.2f} "
+            f"requested_position={requested_position_value:.2f} "
+            f"risk_adjusted_position={risk_adjusted_position_value:.2f}"
+            + (f" skip_reason={skip_reason}" if skip_reason else "")
         )
         # v2.10 现金红线：不能因为新买入信号把broker真实现金买成负数（哪怕总
         # 仓位还在95%以内）——用remaining_broker_cash（本轮从broker真实现金
@@ -974,16 +1010,33 @@ def run_once(
                     alert.log(f"trade_tracker: log_research_snapshot failed {code} — {exc}")
                 if cand.confidence_detail is not None:
                     try:
-                        # v2.9 Confidence Score — observation-only, see
+                        # v2.9 Confidence Score inputs/components — see
                         # engine/confidence_score.py's module docstring.
                         # cand.confidence_detail was computed once at signal
                         # time (engine/pipeline.py::build_candidate_pool),
                         # BEFORE this BUY was placed — never recomputed here,
                         # so this write can never leak this trade's own fill/
                         # outcome back into its own confidence inputs.
+                        #
+                        # v3.0-A Dynamic Position Sizing columns tacked onto
+                        # the same row: confidence_multiplier/base_position/
+                        # requested_position/risk_adjusted_position were
+                        # captured earlier in this same loop iteration (see
+                        # the sizing block above); final_position uses the
+                        # ACTUAL fill (filled_qty x fill_price), the one
+                        # number none of the earlier estimates can know in
+                        # advance (real-cash guard / Portfolio Position
+                        # Manager / partial fills all happen after sizing).
                         tracker.log_confidence_score(
                             trade_id=_trade_id(code, pos_after.get("entry_time")),
                             **cand.confidence_detail,
+                            position_multiplier=confidence_multiplier,
+                            base_position=base_position_value,
+                            requested_position=requested_position_value,
+                            risk_adjusted_position=risk_adjusted_position_value,
+                            final_position=filled_qty * fill_price,
+                            skip_reason=skip_reason,
+                            sizing_formula_version=dynamic_sizing.POSITION_SIZING_FORMULA_VERSION,
                         )
                     except Exception as exc:
                         alert.log(f"trade_tracker: log_confidence_score failed {code} — {exc}")

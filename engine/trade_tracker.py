@@ -285,16 +285,26 @@ CREATE TABLE IF NOT EXISTS trade_exit_diagnostics (
 );
 
 -- v2.9 — Confidence Score (see engine/confidence_score.py). One row per
--- trade, OBSERVATION ONLY: nothing in this codebase reads these columns to
--- gate/scale a BUY/SELL/exit/position-size — see that module's module
--- docstring for the full hard-constraint list. Stores both the raw inputs
--- (rule_based_score/hmm_state/historical_win_rate/historical_expectancy_pct/
--- market_*/volatility_atr_pct/volume_feature) and the derived per-component
--- 0-100 scores, so a later statistical validation pass can audit exactly
--- what fed the final confidence_score without re-deriving it from other
--- tables. weights_json records the ACTUAL renormalized weights used for
--- this row (components that were None are excluded, not zero-weighted) —
--- see engine/confidence_score.py::compute_confidence_score().
+-- trade. The confidence_score/*_component columns are computed purely from
+-- pre-trade inputs (see that module's docstring) and never recomputed after
+-- the fact, so this row can never leak the trade's own outcome back into
+-- itself. Stores both the raw inputs (rule_based_score/hmm_state/
+-- historical_win_rate/historical_expectancy_pct/market_*/volatility_atr_pct/
+-- volume_feature) and the derived per-component 0-100 scores, so a later
+-- statistical validation pass can audit exactly what fed the final
+-- confidence_score without re-deriving it from other tables. weights_json
+-- records the ACTUAL renormalized weights used for this row (components
+-- that were None are excluded, not zero-weighted) — see
+-- engine/confidence_score.py::compute_confidence_score().
+--
+-- v3.0-A — Dynamic Position Sizing columns (see risk/dynamic_sizing.py).
+-- confidence_score above now also determines position_multiplier via
+-- risk/dynamic_sizing.py::confidence_to_position_multiplier() — the ONE
+-- exception, per the v3.0 product decision, to this table otherwise being
+-- pure observation. base_position/requested_position/risk_adjusted_position/
+-- final_position are all in the SAME units as trades.position_value (price
+-- x shares); skip_reason is set only when position_multiplier==0 caused the
+-- candidate to be skipped entirely (see engine/runner.py's sizing block).
 CREATE TABLE IF NOT EXISTS trade_confidence_score (
     trade_id                    TEXT PRIMARY KEY REFERENCES trades(trade_id),
     formula_version              TEXT,
@@ -313,6 +323,13 @@ CREATE TABLE IF NOT EXISTS trade_confidence_score (
     volume_feature                REAL,
     confidence_score               REAL,
     weights_json                   TEXT,
+    sizing_formula_version         TEXT,
+    position_multiplier            REAL,
+    base_position                  REAL,
+    requested_position              REAL,
+    risk_adjusted_position          REAL,
+    final_position                  REAL,
+    skip_reason                     TEXT,
     computed_at                    TEXT
 );
 
@@ -378,6 +395,12 @@ class TradeTracker:
                 ("commission", "REAL"), ("slippage", "REAL"),
                 ("mfe", "REAL"), ("mae", "REAL"),
                 ("market", "TEXT"), ("execution", "TEXT"),
+            ],
+            "trade_confidence_score": [
+                ("sizing_formula_version", "TEXT"), ("position_multiplier", "REAL"),
+                ("base_position", "REAL"), ("requested_position", "REAL"),
+                ("risk_adjusted_position", "REAL"), ("final_position", "REAL"),
+                ("skip_reason", "TEXT"),
             ],
         }
         for table, columns in expected.items():
@@ -772,6 +795,10 @@ class TradeTracker:
         "historical_expectancy_pct", "market_cnn_fear_greed", "market_vix_close",
         "market_component", "volatility_atr_pct", "volatility_component",
         "volume_feature", "confidence_score", "weights_json",
+        # v3.0-A Dynamic Position Sizing — see risk/dynamic_sizing.py.
+        "sizing_formula_version", "position_multiplier", "base_position",
+        "requested_position", "risk_adjusted_position", "final_position",
+        "skip_reason",
     ]
 
     def log_confidence_score(self, trade_id: str, **fields) -> None:
@@ -809,7 +836,10 @@ class TradeTracker:
                 c.historical_win_rate_n, c.historical_expectancy_pct,
                 c.market_cnn_fear_greed, c.market_vix_close, c.market_component,
                 c.volatility_atr_pct, c.volatility_component, c.volume_feature,
-                c.confidence_score, c.weights_json, c.computed_at
+                c.confidence_score, c.weights_json,
+                c.sizing_formula_version, c.position_multiplier, c.base_position,
+                c.requested_position, c.risk_adjusted_position, c.final_position,
+                c.skip_reason, c.computed_at
             FROM trade_confidence_score c
             JOIN trades t ON t.trade_id = c.trade_id
         """
