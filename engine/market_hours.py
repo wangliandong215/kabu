@@ -319,12 +319,14 @@ def market_date_for(code: str, now: datetime = None) -> date:
     return candidate
 
 
-def just_closed(minutes_after: int = 5, now: datetime = None) -> bool:
+def just_closed(minutes_after: int = 5, now: datetime = None,
+                window_minutes: int = 180) -> bool:
     """True once `now` (defaults to current JST time) is at or past
     `minutes_after` past today's US market close — used to fire a one-time
     post-close notification without needing exact alignment with the
-    polling interval. No window end: should_notify_close()'s per-day dedup
-    is what makes this fire only once, so a notification isn't silently
+    polling interval. Generous window end (see bottom of this docstring);
+    should_notify_close()'s per-day dedup is what makes this fire only
+    once, and the window is wide so a notification isn't silently
     lost if a scan pass runs long and the check happens well after close
     (observed 2026-07-24: a stuck moomoo OpenD connection delayed a pass by
     ~20min, long enough to miss a fixed-width window entirely). The close
@@ -340,7 +342,14 @@ def just_closed(minutes_after: int = 5, now: datetime = None) -> bool:
     dedup resets to empty. Guarding on "not currently inside a live
     session" closes that hole. Discovered 2026-09-22: restarting main.py
     ~50min into a live session fired a bogus "美股收盘" push within the
-    first couple of scan passes."""
+    first couple of scan passes.
+
+    The session guard alone still left the pre-market gap exposed: a
+    restart anywhere between close+5min and the next open (e.g. 22:15 JST,
+    09:15 ET) replayed the push too. Discovered 2026-09-23. So the window
+    now ends `window_minutes` after close — wide enough to absorb a
+    delayed pass (the 07-24 case was ~20min), narrow enough that a restart
+    hours later stays silent."""
     if now is None:
         now = datetime.now(_JST)
     elif now.tzinfo is None:
@@ -352,8 +361,10 @@ def just_closed(minutes_after: int = 5, now: datetime = None) -> bool:
         return False
 
     close_t = _US_SUMMER_CLOSE if is_us_dst(now.date()) else _US_WINTER_CLOSE
-    notify_start = _JST.localize(datetime.combine(now.date(), close_t)) + timedelta(minutes=minutes_after)
-    return now >= notify_start
+    close_dt = _JST.localize(datetime.combine(now.date(), close_t))
+    notify_start = close_dt + timedelta(minutes=minutes_after)
+    notify_end = close_dt + timedelta(minutes=window_minutes)
+    return notify_start <= now < notify_end
 
 
 _last_close_notified: date = None
