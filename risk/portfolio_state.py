@@ -50,6 +50,10 @@ class PortfolioState:
 
     market_regime: Optional[str] = None   # attached later in the pass — see module docstring
     price_returns: Optional[Dict[str, "object"]] = None  # code -> pandas.Series of daily returns, lazily attached
+    news_events: Optional[Dict[str, "object"]] = None  # code -> List[news.news_event.NewsEvent], lazily attached —
+                                                          # see V3.4 news/integration/risk_adapter.py and
+                                                          # risk/news_event_risk.py. None = not computed this pass
+                                                          # (DATA_UNAVAILABLE-safe ALLOW), never a guessed empty list.
 
     def get(self, code: str) -> Optional[PositionSnapshot]:
         return self.positions.get(code)

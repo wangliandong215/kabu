@@ -42,7 +42,7 @@ from typing import List, Optional, Tuple
 
 import config
 from risk import beta_risk, correlation_risk, exposure_risk, market_regime_risk
-from risk import position_limits_risk, sector_risk, var_risk
+from risk import news_event_risk, position_limits_risk, sector_risk, var_risk
 from risk.llm_advisor import LLMRiskAdvisor
 from risk.portfolio_state import PortfolioState
 from risk.risk_decision import OrderIntent, RiskDecision, RiskStatus, allow
@@ -59,6 +59,11 @@ _SUB_CHECKS = (
     ("var", var_risk.check),
     ("market_regime", market_regime_risk.check),
     ("correlation", correlation_risk.check),
+    # V3.4 News & Event Engine — see risk/news_event_risk.py's module
+    # docstring. Inert by default: config.NEWS_ENGINE_ENABLED=False and
+    # state.news_events is never attached until news/integration/
+    # risk_adapter.py is wired in by a caller (not engine/runner.py yet).
+    ("news_event", news_event_risk.check),
 )
 
 

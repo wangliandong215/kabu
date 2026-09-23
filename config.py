@@ -1158,6 +1158,34 @@ RISK_ENGINE_LLM_MODE: str = "OFF"
     # 见 risk/llm_advisor.py 模块 docstring，不存在能让 LLM 影响
     # RiskDecision.allowed 的代码路径。
 
+# ── V3.4 News & Event Engine ────────────────────────────────────────────────
+# "News is information, not an order"（V3.4 spec 最终设计原则）。这是一个
+# 全新的结构化事件层，只喂给 risk/news_event_risk.py——_SUB_CHECKS 里新增的
+# 一个 sub-check，跟其它 sub-check 用同样的 (order, state) -> RiskDecision
+# 接口。不替换、不触碰 engine/news.py（实时情感分 -> BUY signal_strength）
+# 或 engine/news_filter.py（3档评分 -> engine/scoring.py 总分），那两个模块
+# 维持原样。第一阶段默认全关，engine/runner.py 也还没接入去填充
+# PortfolioState.news_events（V3.4 spec 第27条禁止事项）——这条 sub-check
+# 在没人显式打开开关、也没人往 state 上挂 news_events 之前，永远是
+# DATA_UNAVAILABLE-safe 的 ALLOW，等价于 V3.4 从未接入。
+NEWS_ENGINE_ENABLED: bool = False
+NEWS_ENGINE_LLM_MODE: str = "OFF"
+    # OFF（默认，NullLLMEventDetector）/ SHADOW（MockLLMEventDetector）。跟
+    # RISK_ENGINE_LLM_MODE 同款——没有 ACTIVE，LLM 在 V3.4 里也只产出
+    # EventExtractionResult 候选，必须先过
+    # news/validation/event_validator.py 才能变成 NewsEvent，永远没有能让
+    # LLM 直接下单的代码路径。
+NEWS_ENGINE_EMERGENCY_SEVERITY_THRESHOLD: float = 0.85
+NEWS_ENGINE_EMERGENCY_CONFIDENCE_THRESHOLD: float = 0.85
+    # severity 和 confidence 必须同时达标，且 event_type 在
+    # news.event_types.EMERGENCY_ELIGIBLE_TYPES 里，NewsEvent.emergency
+    # 才会是 True。emergency=True 也只会 BLOCK 该标的的新开仓（见
+    # risk/news_event_risk.py）——不会、也没有代码路径能触发 SELL。
+NEWS_ENGINE_WARN_SCORE_THRESHOLD: float = -0.40
+    # 聚合后的 effective news score（-1..+1，已过衰减/聚合）低于此值时，
+    # 新开仓 WARN（不 BLOCK）。跟 RISK_ENGINE 一样，第一阶段 WARN 默认不
+    # 影响下单（全局开关仍是 config.RISK_ENGINE_BLOCK_ON_WARN）。
+
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
