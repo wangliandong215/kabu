@@ -1083,6 +1083,81 @@ LLM_ENABLED: bool = False
     # 且即使那时开启，regime/factory.py也会在LLM异常/超时/invalid输出时自动
     # fallback到RuleRegimeProvider——不会让run_once()因为LLM不可用而停止。
 
+# ── V3.3 Portfolio Risk Engine（2026-09-23）──────────────────────────────────
+# 统一的组合风险审核层：所有 _place_order() 调用（BUY 和 SELL）都会经过
+# risk/portfolio_risk_engine.py::PortfolioRiskEngine.evaluate()，产出
+# ALLOW/WARN/BLOCK。跟已有风控层级的关系（互不替代，见各模块 docstring）：
+#   risk/portfolio_risk_manager.py (v2.10)      总仓位95/100/105% + QQQ集中度  —— 不动，本层复用其 evaluate()
+#   risk/portfolio_position_manager.py (v2.12)  regime驱动总仓位天花板         —— 不动，本层复用其 classify_market_regime()
+#   risk/guard.py                                单标的止损/止盈/current-only敞口检查 —— 不动，本层并行运行，不替换
+#   本模块（V3.3）                                projected 敞口/权重/行业/beta/VaR/相关性 + 统一 RiskDecision —— 新增
+# 名字全部加 RISK_ENGINE_ 前缀，不跟上面任何一层的既有常量共用数值，即使初始
+# 值相同——以后单独调整互不影响。
+RISK_ENGINE_ENABLED: bool = True
+    # 总开关。False 时 _place_order() 完全跳过风险引擎（不计算、不记日志），
+    # 等价于 V3.3 从未接入。
+RISK_ENGINE_MODE: str = "AUDIT"
+    # OFF / AUDIT / ENFORCE。AUDIT（默认）正常计算+记录 ALLOW/WARN/BLOCK，
+    # 但不影响真实下单；只有确认过 risk_engine_log.jsonl 一段时间、日志合理
+    # 之后，才应该手动改成 ENFORCE。第一阶段严禁默认 ENFORCE。
+RISK_ENGINE_BLOCK_ON_WARN: bool = False
+    # ENFORCE 模式下，WARN 是否也阻止下单（True）还是仅记录（False，默认）。
+    # BLOCK 无论如何都会阻止（ENFORCE 模式下）。
+
+RISK_ENGINE_MAX_TOTAL_EXPOSURE_PCT: float = 0.95
+    # 新订单导致 projected total exposure 超过此值时 BLOCK（且订单本身是
+    # 增加敞口的方向——SELL/减仓永远不会因为这条规则被挡）。跟v2.10 Layer2
+    # 的 MAX_TOTAL_EXPOSURE_PCT 数值相同只是巧合，两者完全独立配置。
+RISK_ENGINE_MAX_POSITIONS: int = 10
+    # 组合最多同时持有多少个非 QQQ-core 标的（跟 guard.can_open_position()
+    # 同款 core_etf 排除口径）。只在"这笔订单会开出一个全新持仓"时才可能
+    # BLOCK——加仓、减仓、平仓都不受这条规则影响。
+RISK_ENGINE_MAX_POSITION_WEIGHT_PCT: float = 0.10
+    # 单标的 projected market value / total_assets 上限。
+RISK_ENGINE_MAX_SECTOR_EXPOSURE_PCT: dict = {
+    "default": 0.40,
+    "semiconductor": 0.25,
+}
+    # 按 config.SECTOR_MAP 的 sector 字符串查表，查不到用 "default"。
+RISK_ENGINE_SECTOR_WARN_RATIO: float = 0.90
+    # projected sector exposure 达到该 sector 上限的这个比例（但还没超过）
+    # 时 WARN，超过时才 BLOCK。
+
+RISK_ENGINE_MAX_PORTFOLIO_BETA: float = 1.20
+RISK_ENGINE_BETA_DATA_MODE: str = "safe"
+    # "safe"（默认）：beta 数据不足时 DATA_UNAVAILABLE -> WARN。
+    # "strict"：DATA_UNAVAILABLE -> BLOCK。两种模式都绝不会静默当成0/1
+    # 或直接放行不记录。
+RISK_ENGINE_BETA_LOOKBACK_DAYS: int = 252
+RISK_ENGINE_BETA_MIN_BARS: int = 60
+    # 计算 beta 至少需要的重叠交易日数量，不够视为 DATA_UNAVAILABLE。
+
+RISK_ENGINE_VAR_LOOKBACK_DAYS: int = 252
+RISK_ENGINE_VAR_CONFIDENCE: float = 0.95
+RISK_ENGINE_VAR_METHOD: str = "historical"   # "historical" | "parametric"
+RISK_ENGINE_VAR_WARN_PCT: float = 0.03
+    # 1-day VaR（占 total_assets 比例）超过此值 WARN。
+RISK_ENGINE_VAR_BLOCK_PCT = None   # float | None
+    # None（默认）= 第一阶段绝不因为 VaR 硬 BLOCK，只计算/记录/WARN。要开启
+    # 硬阈值必须显式配置成一个数值。
+
+RISK_ENGINE_CORRELATION_WARN_THRESHOLD: float = 0.80
+    # 新标的跟已有持仓（或QQQ）历史日收益率相关系数超过此值 WARN（SOFT
+    # RISK——第一阶段绝不 BLOCK，见 V3.3 spec 十一）。
+RISK_ENGINE_CORRELATION_LOOKBACK_DAYS: int = 252
+RISK_ENGINE_CORRELATION_MIN_BARS: int = 60
+
+RISK_ENGINE_REGIME_RESTRICT_NEW_POSITIONS_ON: tuple = ("RISK_OFF",)
+    # 复用 risk/portfolio_position_manager.py::classify_market_regime() 的
+    # BULL/NORMAL/CAUTION/RISK_OFF 输出（不新造一套 regime 分类）。regime在
+    # 这个 tuple 里时，新开仓（BUY 且当前不持有该标的）BLOCK；加仓/SELL不受影响。
+RISK_ENGINE_REGIME_WARN_ON: tuple = ("CAUTION", "UNKNOWN")
+
+RISK_ENGINE_LLM_MODE: str = "OFF"
+    # OFF（默认）/ SHADOW。没有 ACTIVE——LLM 在 V3.3 里永远只是 Advisor，
+    # 见 risk/llm_advisor.py 模块 docstring，不存在能让 LLM 影响
+    # RiskDecision.allowed 的代码路径。
+
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars

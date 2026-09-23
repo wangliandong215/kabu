@@ -40,6 +40,8 @@ from portfolio import broker_state as broker_state_mod
 from portfolio.broker_state import BrokerState
 from portfolio.tracker import Portfolio
 from risk import guard, sizing, dynamic_sizing, portfolio_risk_manager, portfolio_position_manager, qqq_core_recovery
+from risk.portfolio_state import PortfolioState, build_portfolio_state
+from risk.portfolio_risk_engine import evaluate_order as risk_engine_evaluate
 from engine import confidence_score
 import position_manager
 import exit_engine
@@ -171,6 +173,17 @@ def run_once(
     if drawdown_halt:
         alert.warn("触发最大回撤熔断，本轮禁止新开仓（已持仓位仍正常检查退出）")
 
+    # ── V3.3 Portfolio Risk Engine snapshot ───────────────────────────────────
+    # Starts empty (DATA_UNAVAILABLE-equivalent — harmless, since every
+    # sub-check treats missing total_assets as non-blocking) so the exit-loop
+    # SELLs below, which run before broker_state is fetched, still have a
+    # risk_state to pass into _place_order(). Reassigned to the real
+    # broker-ground-truth snapshot once broker_state is fetched further down
+    # (see "v2.10 Portfolio Risk Manager" section), and enriched with
+    # market_regime once classify_market_regime() runs. Never re-fetches
+    # broker state itself — see risk/portfolio_state.py module docstring.
+    risk_state = PortfolioState()
+
     if auto_route:
         results = smart_scan(open_codes, ktype=ktype, bars=bars)
     else:
@@ -225,6 +238,7 @@ def run_once(
                 fill = _place_order(
                     code=code, side="SELL", qty=pos["qty"], price=price,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+                    portfolio_state=risk_state,
                 )
                 if confirmed and fill["dealt_qty"] >= pos["qty"]:
                     exit_price = fill["dealt_avg_price"] or price
@@ -299,6 +313,7 @@ def run_once(
                 trd_env=trd_env,
                 env_label=env_label,
                 confirmed=confirmed,
+                portfolio_state=risk_state,
             )
             if confirmed and fill["dealt_qty"] >= pos["qty"]:
                 exit_price = fill["dealt_avg_price"] or price
@@ -358,6 +373,7 @@ def run_once(
 
         if broker_state is not None:
             remaining_broker_cash = broker_state.cash
+            risk_state = build_portfolio_state(broker_state, portfolio)
 
             diffs = portfolio_risk_manager.reconcile(broker_state, portfolio.data["positions"])
             diff_grew = portfolio_risk_manager.check_and_update_diff_growth(diffs)
@@ -395,6 +411,7 @@ def run_once(
                 executed_orders = _run_emergency_rebalance(
                     portfolio=portfolio, results=results, trd_env=trd_env, env_label=env_label,
                     confirmed=rebalance_confirmed, ktype=ktype, bars=bars, tracker=tracker,
+                    portfolio_state=risk_state,
                 )
                 remaining_broker_cash += sum(o["price"] * o["sell_qty"] for o in executed_orders)
 
@@ -433,6 +450,7 @@ def run_once(
                     portfolio=portfolio, trd_env=trd_env, env_label=env_label,
                     confirmed=trim_confirmed, ktype=ktype, bars=bars,
                     broker_state=broker_state, tracker=tracker,
+                    portfolio_state=risk_state,
                 )
                 # _run_qqq_core_trim() returns a non-empty list in preview
                 # mode too (the dict(s) that WOULD be sold — same convention
@@ -537,6 +555,7 @@ def run_once(
         pm_regime = portfolio_position_manager.classify_market_regime(
             weather_code=weather_code, qqq_above_ma=_qqq_above_ma(),
             drawdown_halt=drawdown_halt)
+        risk_state.market_regime = pm_regime   # V3.3 — see risk/market_regime_risk.py
         pm_budget = portfolio_position_manager.compute_exposure_budget(
             pm_regime, assessment.long_mv, assessment.total_assets)
         if pm_budget.remaining_budget is not None:
@@ -611,6 +630,7 @@ def run_once(
             fill = _place_order(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+                portfolio_state=risk_state,
             )
             if confirmed and fill["dealt_qty"] > 0:
                 filled_qty = int(fill["dealt_qty"])
@@ -685,6 +705,7 @@ def run_once(
             fill = _place_order(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+                portfolio_state=risk_state,
             )
             if confirmed and fill["dealt_qty"] > 0:
                 filled_qty = int(fill["dealt_qty"])
@@ -760,7 +781,7 @@ def run_once(
                     pm_fill = _place_order(
                         code=code, side="SELL", qty=pm_decision.reduction_qty,
                         price=price, trd_env=trd_env, env_label=env_label,
-                        confirmed=confirmed,
+                        confirmed=confirmed, portfolio_state=risk_state,
                     )
                     if confirmed and pm_fill["dealt_qty"] > 0:
                         exit_price = pm_fill["dealt_avg_price"] or price
@@ -907,6 +928,7 @@ def run_once(
                     portfolio, incoming_code=code, incoming_score=cand.total_score,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                     results=results, tracker=tracker, ktype=ktype, bars=bars,
+                    portfolio_state=risk_state,
                 )
             if victim_code is None:
                 skip_price = cand.current_price
@@ -1033,6 +1055,7 @@ def run_once(
             trd_env=trd_env,
             env_label=env_label,
             confirmed=confirmed,
+            portfolio_state=risk_state,
         )
         if confirmed and fill["dealt_qty"] > 0:
             filled_qty = int(fill["dealt_qty"])
@@ -1213,6 +1236,7 @@ def run_once(
                             code=config.QQQ_CORE_CODE, side="BUY",
                             qty=qty, price=qqq_price,
                             trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+                            portfolio_state=risk_state,
                         )
                         if confirmed and fill["dealt_qty"] > 0:
                             filled_qty = int(fill["dealt_qty"])
@@ -1536,7 +1560,8 @@ def _days_held(entry_time_iso) -> int:
 
 def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_label: str,
                              confirmed: bool, ktype: str, bars: int,
-                             tracker: Optional[TradeTracker] = None) -> List[dict]:
+                             tracker: Optional[TradeTracker] = None,
+                             portfolio_state: Optional[PortfolioState] = None) -> List[dict]:
     """v2.10.1 EMERGENCY-tier rebalance executor.
 
     confirmed=False (the automatic loop's default until config.
@@ -1586,7 +1611,8 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
             alert.info(f"[预览] 再平衡将卖出 {order.code} {order.sell_qty}股 "
                       f"@{order.price:.4f}（{order.reason}，优先级{order.priority}）")
             _place_order(code=order.code, side="SELL", qty=order.sell_qty, price=order.price,
-                        trd_env=trd_env, env_label=env_label, confirmed=False)
+                        trd_env=trd_env, env_label=env_label, confirmed=False,
+                        portfolio_state=portfolio_state)
             previewed.append({"code": order.code, "sell_qty": order.sell_qty,
                               "price": order.price, "reason": order.reason})
         return previewed
@@ -1635,7 +1661,8 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
             alert.info(f"再平衡卖出 {order.code} {sell_qty}股 @{order.price:.4f}"
                       f"（{order.reason}，优先级{order.priority}，第{i + 1}笔）")
             fill = _place_order(code=order.code, side="SELL", qty=sell_qty, price=order.price,
-                                trd_env=trd_env, env_label=env_label, confirmed=True)
+                                trd_env=trd_env, env_label=env_label, confirmed=True,
+                                portfolio_state=portfolio_state)
             if fill["dealt_qty"] <= 0:
                 alert.error(f"再平衡：{order.code}未成交（{fill['status']}），停止本轮再平衡，"
                             f"等待下次评估重新计算")
@@ -1701,7 +1728,8 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
 
 def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed: bool,
                        ktype: str, bars: int, broker_state: BrokerState,
-                       tracker: Optional[TradeTracker] = None) -> List[dict]:
+                       tracker: Optional[TradeTracker] = None,
+                       portfolio_state: Optional[PortfolioState] = None) -> List[dict]:
     """v2.11 QQQ CORE concentration hard-limit trim (Layer 1) — see config.py
     QQQ_CORE_SOFT_LIMIT_PCT/QQQ_CORE_HARD_LIMIT_PCT/QQQ_CORE_TRIM_TARGET_PCT
     docstring and risk/portfolio_risk_manager.py's evaluate_qqq_concentration()/
@@ -1757,7 +1785,8 @@ def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed:
         else:
             alert.log(preview_msg + "（较上次推送变化不大，本轮不重复推送）")
         _place_order(code=order.code, side="SELL", qty=order.sell_qty, price=order.price,
-                    trd_env=trd_env, env_label=env_label, confirmed=False)
+                    trd_env=trd_env, env_label=env_label, confirmed=False,
+                    portfolio_state=portfolio_state)
         return [{"code": order.code, "sell_qty": order.sell_qty,
                  "price": order.price, "reason": order.reason}]
 
@@ -1788,7 +1817,8 @@ def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed:
 
         alert.info(f"QQQ CORE trim 卖出 {order.code} {sell_qty}股 @{order.price:.4f}（{order.reason}）")
         fill = _place_order(code=order.code, side="SELL", qty=sell_qty, price=order.price,
-                            trd_env=trd_env, env_label=env_label, confirmed=True)
+                            trd_env=trd_env, env_label=env_label, confirmed=True,
+                            portfolio_state=portfolio_state)
         if fill["dealt_qty"] <= 0:
             alert.error(f"QQQ CORE trim：{order.code}未成交（{fill['status']}），停止")
             return []
@@ -1833,7 +1863,8 @@ def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed:
 def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incoming_score: float,
                                 trd_env, env_label: str, confirmed: bool,
                                 results: dict, tracker: Optional[TradeTracker] = None,
-                                ktype: str = "K_DAY", bars: int = 120) -> Optional[str]:
+                                ktype: str = "K_DAY", bars: int = 120,
+                                portfolio_state: Optional[PortfolioState] = None) -> Optional[str]:
     """v2.3/v2.4 Portfolio Capacity Manager 移植进实盘：MAX_POSITIONS已满
     时，尝试找一个可换出的持仓、真正执行SELL，为新的FULL信号腾出名额。
     判断逻辑调用 portfolio.capacity_manager.evaluate_replacement()——跟
@@ -1885,6 +1916,7 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
     fill = _place_order(
         code=victim_code, side="SELL", qty=victim_pos["qty"], price=victim_price,
         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
+        portfolio_state=portfolio_state,
     )
     if confirmed and fill["dealt_qty"] < victim_pos["qty"]:
         alert.error(f"主动置换卖出{victim_code}未完全成交"
@@ -1937,6 +1969,7 @@ def _place_order(
     trd_env,
     env_label: str,
     confirmed: bool,
+    portfolio_state: Optional[PortfolioState] = None,
 ) -> dict:
     """
     Place an order via whichever broker engine.broker.get_broker(code)
@@ -1946,7 +1979,41 @@ def _place_order(
     gate on dealt_qty > 0, not on order_id, before touching portfolio state
     (order_id only means the broker accepted the order, not that it filled;
     see engine/broker.py module docstring for the incident this fixed).
+
+    V3.3 Portfolio Risk Engine — this is the single choke point every BUY
+    and SELL (confirmed or preview) already funnels through, so it's the
+    one place risk/portfolio_risk_engine.py::evaluate_order() is called
+    from (see that module's docstring for why: one unified, audited gate
+    instead of scattering checks across every BUY/SELL call site).
+    portfolio_state=None (a caller not yet threading it through, or
+    config.RISK_ENGINE_ENABLED=False/MODE="OFF") skips evaluation entirely
+    — fails open, same convention as every other new/experimental layer in
+    this file. AUDIT mode (config.RISK_ENGINE_MODE, the default) always
+    computes and logs but never changes what happens below. ENFORCE mode's
+    BLOCK (or WARN when config.RISK_ENGINE_BLOCK_ON_WARN) short-circuits
+    before the broker is ever called, returning the same shape the
+    PREFLIGHT_FAILED path below already returns — existing callers'
+    `dealt_qty > 0` gating handles it with zero caller-side changes.
     """
+    if (portfolio_state is not None and config.RISK_ENGINE_ENABLED
+            and config.RISK_ENGINE_MODE != "OFF"):
+        risk_decision = None
+        try:
+            risk_decision = risk_engine_evaluate(
+                code=code, side=side, qty=qty, price=price, state=portfolio_state)
+        except Exception as exc:
+            alert.log(f"risk_engine: evaluate failed for {code} "
+                      f"({exc.__class__.__name__}: {exc}) — failing open, order proceeds unevaluated")
+
+        if risk_decision is not None and config.RISK_ENGINE_MODE == "ENFORCE":
+            should_block = risk_decision.status.value == "BLOCK" or (
+                risk_decision.status.value == "WARN" and config.RISK_ENGINE_BLOCK_ON_WARN)
+            if should_block:
+                alert.error(f"{code} {side} 被 Portfolio Risk Engine 拦截"
+                            f"（{risk_decision.status.value}）: {risk_decision.reason}")
+                return {"order_id": "", "dealt_qty": 0.0, "dealt_avg_price": 0.0,
+                        "status": "RISK_BLOCKED"}
+
     if confirmed and config.PREFLIGHT_ENABLED:
         result = market_preflight.check(code)
         if not result.ok:

@@ -125,7 +125,7 @@ class PositionManagerGateTestCase(unittest.TestCase):
         position_manager.state_store._STORE_PATH = Path(self._tmpdir.name) / "pm_state.json"
         position_manager.POSITION_MANAGER_LOG_PATH = Path(self._tmpdir.name) / "pm_log.jsonl"
 
-        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty})
             dealt = float(qty) if confirmed else 0.0
             return {"order_id": "FAKE123" if confirmed else "", "dealt_qty": dealt,

@@ -106,7 +106,7 @@ class PortfolioPositionManagerGateTestCase(unittest.TestCase):
         runner.portfolio_risk_manager.log_qqq_snapshot = lambda *a, **kw: None
         runner.portfolio_position_manager.log_attempt = lambda *a, **kw: None
 
-        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
             dealt = float(qty) if confirmed else 0.0
             return {"order_id": "FAKE123" if confirmed else "", "dealt_qty": dealt,

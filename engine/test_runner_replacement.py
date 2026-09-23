@@ -67,7 +67,7 @@ class TestAttemptActiveReplacement(unittest.TestCase):
         test_support.unmute_alert_file_logging(self._alert_handlers)
 
     def _mock_place_order(self, dealt_qty_override=None):
-        def _mock(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
             dealt = qty if dealt_qty_override is None else dealt_qty_override
             if not confirmed:
@@ -225,7 +225,7 @@ class TestBacktestRunnerConsistency(unittest.TestCase):
         self._orig_place_order = runner._place_order
         self._orig_get_price = runner.get_price
         self._orig_trade_sell = runner.alert.trade_sell
-        runner._place_order = lambda code, side, qty, price, trd_env, env_label, confirmed: {
+        runner._place_order = lambda code, side, qty, price, trd_env, env_label, confirmed, **kw: {
             "order_id": "FAKE", "dealt_qty": float(qty), "dealt_avg_price": price,
             "status": "FILLED_ALL"}
         runner.get_price = lambda code: 12.0

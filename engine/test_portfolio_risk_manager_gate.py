@@ -133,7 +133,7 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
         # C:\KabuData\portfolio\qqq_trim_last_preview.json during tests.
         runner.portfolio_risk_manager.check_qqq_trim_preview_repeat = lambda *a, **kw: True
 
-        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
             dealt = float(qty) if confirmed else 0.0
             return {"order_id": "FAKE123" if confirmed else "", "dealt_qty": dealt,
@@ -223,7 +223,7 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
         )
         runner.broker_state_mod.fetch_broker_state = lambda trd_env: broker_state
 
-        def _mock_place_order_mutating(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order_mutating(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
             dealt = float(qty) if confirmed else 0.0
             if confirmed and dealt > 0 and code in broker_state.positions:
@@ -292,7 +292,7 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
 
         fill_calls = {"n": 0}
 
-        def _partial_then_full(code, side, qty, price, trd_env, env_label, confirmed):
+        def _partial_then_full(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             fill_calls["n"] += 1
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
             if fill_calls["n"] == 1:
@@ -427,7 +427,7 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
         config.QQQ_CORE_TRIM_AUTO_EXECUTE = True
         qqq, broker_state = self._seed_qqq_core_hard_limit()
 
-        def _mock_place_order_mutating(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order_mutating(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty, "price": price})
             dealt = float(qty) if confirmed else 0.0
             if confirmed and dealt > 0 and code in broker_state.positions:

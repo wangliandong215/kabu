@@ -123,7 +123,7 @@ class ExitEngineGateTestCase(unittest.TestCase):
         exit_engine.EXIT_ENGINE_LOG_PATH = Path(self._tmpdir.name) / "ee_log.jsonl"
         config.POSITION_MANAGER_V31_MODE = "OFF"   # isolate this test to 2b.6 only
 
-        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty})
             dealt = float(qty) if confirmed else 0.0
             return {"order_id": "FAKE123" if confirmed else "", "dealt_qty": dealt,

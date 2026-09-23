@@ -99,7 +99,7 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
         runner.guard.check_max_drawdown = lambda portfolio: True
         runner.news_sentiment.macro_circuit_breaker = lambda: ""
 
-        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed):
+        def _mock_place_order(code, side, qty, price, trd_env, env_label, confirmed, **_kwargs):
             self.placed_orders.append({"code": code, "side": side, "qty": qty})
             dealt = float(qty) if confirmed else 0.0
             return {"order_id": "FAKE123" if confirmed else "", "dealt_qty": dealt,
