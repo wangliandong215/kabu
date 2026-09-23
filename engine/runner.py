@@ -34,6 +34,7 @@ from engine import research_snapshot
 from engine import market_weather
 from engine import market_context
 from engine.market_hours import filter_open, should_notify_close, should_notify_open, is_daytime_jst
+from regime import evaluate_and_log as regime_evaluate_and_log, MarketContext as RegimeContext
 from portfolio import capacity_manager
 from portfolio import broker_state as broker_state_mod
 from portfolio.broker_state import BrokerState
@@ -495,6 +496,24 @@ def run_once(
             alert.log(f"runner: market weather code={weather_code}")
     except Exception as exc:
         alert.warn(f"大盘熔断/天气检测失败 — {exc}")
+
+    # ── Regime Observation Layer (added 2026-09-23, read-only) ───────────────
+    # Computes this pass's MarketRegime exactly once (BULL/NEUTRAL/BEAR/
+    # CRASH — see regime/ package docstring) and appends one line to
+    # regime_log.jsonl. This is NOT risk/portfolio_position_manager.py's
+    # classify_market_regime() (called separately below, unchanged) and its
+    # result is not read by any BUY/SELL/sizing/exposure decision anywhere
+    # in this function — observation only, for a future local-LLM Regime
+    # Provider to plug into without touching this file. config.LLM_ENABLED
+    # defaults to False, so this always resolves to RuleRegimeProvider.
+    # Never raises/blocks: evaluate_and_log() catches all failures itself.
+    #
+    # A fresh, independent _qqq_above_ma() call here — same pattern the
+    # Portfolio Position Manager block below already uses for the same
+    # reason (never touching the QQQ Beta floor section's own call site).
+    regime_evaluate_and_log(RegimeContext(
+        weather_code=weather_code, qqq_above_ma=_qqq_above_ma(),
+        drawdown_halt=drawdown_halt))
 
     # ── v2.12 Portfolio Position Manager (Phase 2, Observation Mode) ─────────
     # Account-level exposure ceiling, additive to (never replacing) the

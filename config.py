@@ -1069,6 +1069,20 @@ QQQ_CORE_RECOVERY_LEVEL3_AUTO_EXECUTE: bool = False
     # 没有能下单的调用链）——这里先占位声明，供未来如果要做可执行版本时用，
     # 不要在这次改动里接上任何实际下单逻辑。
 
+# ── Regime / Local LLM（Observation Layer，2026-09-23）─────────────────────
+# 为未来接入本地LLM预留的开关。见 regime/ 包模块docstring——这是一个独立于
+# risk/portfolio_position_manager.py / risk/portfolio_risk_manager.py 的
+# 只读观察层：engine/runner.py每pass调用一次 regime.evaluate_and_log()，
+# 计算出的MarketRegime只写日志（C:\KabuData\portfolio\regime_log.jsonl），
+# 不参与任何BUY/SELL/sizing/exposure决策，也不改变现有
+# classify_market_regime()/compute_exposure_budget()调用链。
+LLM_ENABLED: bool = False
+    # 必须保持False：regime/llm_provider.py::LocalLLMRegimeProvider目前只是
+    # 占位类（evaluate()直接raise NotImplementedError），当前阶段不接入任何
+    # 真实本地模型。改成True之前必须先有一个真正实现的LocalLLMRegimeProvider，
+    # 且即使那时开启，regime/factory.py也会在LLM异常/超时/invalid输出时自动
+    # fallback到RuleRegimeProvider——不会让run_once()因为LLM不可用而停止。
+
 # ── Data cache ────────────────────────────────────────────────────────────────
 CACHE_DIR:          str = r"C:\KabuData\live_cache"
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars

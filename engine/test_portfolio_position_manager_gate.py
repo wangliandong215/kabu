@@ -67,7 +67,11 @@ class PortfolioPositionManagerGateTestCase(unittest.TestCase):
             "has_earnings_risk": runner.event_risk.has_earnings_risk,
             "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
             "get_price": runner.get_price,
+            "regime_evaluate_and_log": runner.regime_evaluate_and_log,
         }
+        # Regime Observation Layer (2026-09-23) — pure/no-op stub so tests
+        # never write to the real C:\KabuData\portfolio\regime_log.jsonl.
+        runner.regime_evaluate_and_log = lambda *a, **kw: None
         # _qqq_above_ma() hits live quotes -- stub True so the QQQ Beta floor's
         # own MA200 exit/top-up logic never confounds these tests, and so the
         # Position Manager regime classifier (which also calls this) is
@@ -137,6 +141,7 @@ class PortfolioPositionManagerGateTestCase(unittest.TestCase):
         runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
         config.PORTFOLIO_POSITION_MANAGER_ENABLED = self._orig["PM_ENABLED"]
         runner.get_price = self._orig["get_price"]
+        runner.regime_evaluate_and_log = self._orig["regime_evaluate_and_log"]
         self._tmpdir.cleanup()
         test_support.unmute_alert_file_logging(self._alert_handlers)
 

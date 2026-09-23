@@ -81,7 +81,11 @@ class QQQCoreRecoveryGateTestCase(unittest.TestCase):
             "qcr_save_state": qqq_core_recovery.save_state,
             "qcr_log_recovery_pass": qqq_core_recovery.log_recovery_pass,
             "qcr_log_level3_plan": qqq_core_recovery.log_level3_plan,
+            "regime_evaluate_and_log": runner.regime_evaluate_and_log,
         }
+        # Regime Observation Layer (2026-09-23) — pure/no-op stub so tests
+        # never write to the real C:\KabuData\portfolio\regime_log.jsonl.
+        runner.regime_evaluate_and_log = lambda *a, **kw: None
         # _qqq_above_ma() hits live quotes -- stub True so the QQQ Beta floor's
         # own MA200 exit/top-up logic never confounds these tests.
         runner._qqq_above_ma = lambda: True
@@ -161,6 +165,7 @@ class QQQCoreRecoveryGateTestCase(unittest.TestCase):
         qqq_core_recovery.save_state = self._orig["qcr_save_state"]
         qqq_core_recovery.log_recovery_pass = self._orig["qcr_log_recovery_pass"]
         qqq_core_recovery.log_level3_plan = self._orig["qcr_log_level3_plan"]
+        runner.regime_evaluate_and_log = self._orig["regime_evaluate_and_log"]
         self._tmpdir.cleanup()
         test_support.unmute_alert_file_logging(self._alert_handlers)
 

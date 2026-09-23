@@ -91,7 +91,11 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
             "has_earnings_risk": runner.event_risk.has_earnings_risk,
             "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
             "get_price": runner.get_price,
+            "regime_evaluate_and_log": runner.regime_evaluate_and_log,
         }
+        # Regime Observation Layer (2026-09-23) — pure/no-op stub so tests
+        # never write to the real C:\KabuData\portfolio\regime_log.jsonl.
+        runner.regime_evaluate_and_log = lambda *a, **kw: None
         # _qqq_above_ma() hits live quotes (OpenQuoteContext) to check QQQ vs
         # its MA200 -- stub it True (no MA200-break exit in flight) so these
         # tests isolate the Portfolio Risk Manager path from the pre-existing,
@@ -164,6 +168,7 @@ class PortfolioRiskManagerGateTestCase(unittest.TestCase):
         config.PORTFOLIO_RISK_EMERGENCY_AUTO_EXECUTE = self._orig["AUTO_EXECUTE"]
         config.QQQ_CORE_TRIM_AUTO_EXECUTE = self._orig["QQQ_CORE_TRIM_AUTO_EXECUTE"]
         runner.get_price = self._orig["get_price"]
+        runner.regime_evaluate_and_log = self._orig["regime_evaluate_and_log"]
         prm._LOCK_PATH.unlink(missing_ok=True)
         self._tmpdir.cleanup()
         test_support.unmute_alert_file_logging(self._alert_handlers)

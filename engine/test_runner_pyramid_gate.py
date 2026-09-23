@@ -68,8 +68,12 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
             "fetch_broker_state": runner.broker_state_mod.fetch_broker_state,
             "has_earnings_risk": runner.event_risk.has_earnings_risk,
             "build_trade_research_snapshot": runner.research_snapshot.build_trade_research_snapshot,
+            "regime_evaluate_and_log": runner.regime_evaluate_and_log,
         }
 
+        # Regime Observation Layer (2026-09-23) — pure/no-op stub so tests
+        # never write to the real C:\KabuData\portfolio\regime_log.jsonl.
+        runner.regime_evaluate_and_log = lambda *a, **kw: None
         runner.broker_state_mod.fetch_broker_state = lambda trd_env: _NO_RISK_BROKER_STATE
         runner.event_risk.has_earnings_risk = lambda code, trade_date=None: False
         runner.research_snapshot.build_trade_research_snapshot = lambda *a, **kw: {}
@@ -113,6 +117,7 @@ class TestPyramidGatedByMacroBlock(unittest.TestCase):
         runner.broker_state_mod.fetch_broker_state = self._orig["fetch_broker_state"]
         runner.event_risk.has_earnings_risk = self._orig["has_earnings_risk"]
         runner.research_snapshot.build_trade_research_snapshot = self._orig["build_trade_research_snapshot"]
+        runner.regime_evaluate_and_log = self._orig["regime_evaluate_and_log"]
         self._tmpdir.cleanup()
         test_support.unmute_alert_file_logging(self._alert_handlers)
 
