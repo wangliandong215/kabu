@@ -32,6 +32,7 @@ import uuid
 
 import notify.alert as alert
 from common import infer_market, make_trade_ctx, safe_close
+from engine import order_audit
 
 _DRY_RUN_FILL = {"order_id": "", "dealt_qty": 0.0, "dealt_avg_price": 0.0, "status": "DRY_RUN"}
 
@@ -74,6 +75,9 @@ class MoomooBroker:
             order_type = ft.OrderType.NORMAL
             trd_side = ft.TrdSide.BUY if side == "BUY" else ft.TrdSide.SELL
 
+            # P5 Execution Audit — record-only calls, never raise (see
+            # engine/order_audit.py); nothing below depends on them.
+            order_audit.event("SUBMIT_SENT", price=price, qty=qty, side=side)
             ret, data = trd_ctx.place_order(
                 price=price,
                 qty=qty,
@@ -83,23 +87,31 @@ class MoomooBroker:
                 trd_env=trd_env,
             )
             if ret != ft.RET_OK:
+                order_audit.event("SUBMIT_REJECTED", error=str(data))
                 alert.error(f"{code} {side_cn}下单失败 — {data}")
                 return result
 
             order_id = str(data["order_id"].iloc[0])
             result["order_id"] = order_id
+            order_audit.event("ACK", order_id=order_id)
 
             status = ""
             for _ in range(MoomooBroker._POLL_ATTEMPTS):
                 time.sleep(MoomooBroker._POLL_INTERVAL_SEC)
                 q_ret, q_data = trd_ctx.order_list_query(order_id=order_id, trd_env=trd_env)
                 if q_ret != ft.RET_OK or q_data is None or len(q_data) == 0:
+                    order_audit.event("POLL_FAILED", ret=str(q_ret))
                     continue
                 row = q_data.iloc[0]
                 status = str(row.get("order_status", ""))
                 result["dealt_qty"] = float(row.get("dealt_qty", 0) or 0)
                 result["dealt_avg_price"] = float(row.get("dealt_avg_price", 0) or 0)
                 result["status"] = status
+                order_audit.event("POLL", status=status, dealt_qty=result["dealt_qty"],
+                                  dealt_avg_price=result["dealt_avg_price"],
+                                  terminal=status in MoomooBroker._TERMINAL,
+                                  create_time=row.get("create_time"),
+                                  updated_time=row.get("updated_time"))
                 if status in MoomooBroker._TERMINAL:
                     break
 
@@ -109,11 +121,13 @@ class MoomooBroker:
             # function's caller has any record of.
             if status not in MoomooBroker._TERMINAL:
                 try:
+                    order_audit.event("CANCEL_SENT", order_id=order_id)
                     trd_ctx.modify_order(
                         modify_order_op=ft.ModifyOrderOp.CANCEL,
                         order_id=order_id, qty=qty, price=price, trd_env=trd_env,
                     )
                 except Exception as exc:
+                    order_audit.event("CANCEL_FAILED", error=f"{exc.__class__.__name__}: {exc}")
                     alert.log(f"{code} 撤销未成交订单失败 — {exc}")
                 # Re-check once to capture whatever filled right up to the cancel.
                 q_ret, q_data = trd_ctx.order_list_query(order_id=order_id, trd_env=trd_env)
@@ -122,6 +136,14 @@ class MoomooBroker:
                     result["dealt_qty"] = float(row.get("dealt_qty", 0) or 0)
                     result["dealt_avg_price"] = float(row.get("dealt_avg_price", 0) or 0)
                     result["status"] = str(row.get("order_status", ""))
+                    order_audit.event("POLL", status=result["status"],
+                                      dealt_qty=result["dealt_qty"],
+                                      dealt_avg_price=result["dealt_avg_price"],
+                                      terminal=result["status"] in MoomooBroker._TERMINAL,
+                                      create_time=row.get("create_time"),
+                                      updated_time=row.get("updated_time"), after_cancel=True)
+                else:
+                    order_audit.event("POLL_FAILED", ret=str(q_ret), after_cancel=True)
 
             if result["dealt_qty"] <= 0:
                 alert.warn(f"{code} {side_cn}未成交（{result['status']}），"
@@ -130,6 +152,8 @@ class MoomooBroker:
                 alert.warn(f"{code} {side_cn}部分成交 {result['dealt_qty']:.0f}/{qty}股 "
                            f"@{result['dealt_avg_price']:.2f}，剩余已撤单")
         except Exception as exc:
+            order_audit.event("EXCEPTION", error=f"{exc.__class__.__name__}: {exc}",
+                              order_id=result["order_id"] or None)
             alert.error(f"{code} 下单时发生异常 — {exc}")
         finally:
             safe_close(trd_ctx)

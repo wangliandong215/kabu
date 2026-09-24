@@ -29,6 +29,7 @@ from engine import scoring
 from engine import entry_quality
 from engine import event_risk
 from engine import market_preflight
+from engine import order_audit
 from engine import regime
 from engine import research_snapshot
 from engine import market_weather
@@ -159,6 +160,9 @@ def run_once(
         alert.log(f"trade_tracker: init failed, trade DB disabled this pass — {exc}")
         tracker = None
     execution_label = "PAPER" if is_jp_pass else "REAL"
+    # V3.6 P5 Execution Audit: one pass_id per run_once(), shared by every
+    # order audited this pass (record-only, see engine/order_audit.py).
+    order_audit.start_pass(run_id=run_id, env_label=env_label)
 
     # ── Portfolio-level guard ─────────────────────────────────────────────────
     # 2026-07-11 fix: this used to `return` here, which skipped scan() and the
@@ -239,6 +243,7 @@ def run_once(
                     code=code, side="SELL", qty=pos["qty"], price=price,
                     trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                     portfolio_state=risk_state,
+                    audit_intent="CORE_ETF_MA_EXIT",
                 )
                 if confirmed and fill["dealt_qty"] >= pos["qty"]:
                     exit_price = fill["dealt_avg_price"] or price
@@ -314,6 +319,7 @@ def run_once(
                 env_label=env_label,
                 confirmed=confirmed,
                 portfolio_state=risk_state,
+                audit_intent=f"EXIT:{reason}",
             )
             if confirmed and fill["dealt_qty"] >= pos["qty"]:
                 exit_price = fill["dealt_avg_price"] or price
@@ -639,6 +645,7 @@ def run_once(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                 portfolio_state=risk_state,
+                audit_intent="PYRAMID_PROMOTE",
             )
             if confirmed and fill["dealt_qty"] > 0:
                 filled_qty = int(fill["dealt_qty"])
@@ -714,6 +721,7 @@ def run_once(
                 code=code, side="BUY", qty=add_qty, price=price,
                 trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                 portfolio_state=risk_state,
+                audit_intent="PYRAMID_ADD",
             )
             if confirmed and fill["dealt_qty"] > 0:
                 filled_qty = int(fill["dealt_qty"])
@@ -790,6 +798,7 @@ def run_once(
                         code=code, side="SELL", qty=pm_decision.reduction_qty,
                         price=price, trd_env=trd_env, env_label=env_label,
                         confirmed=confirmed, portfolio_state=risk_state,
+                        audit_intent="POSITION_MANAGER_REDUCE",
                     )
                     if confirmed and pm_fill["dealt_qty"] > 0:
                         exit_price = pm_fill["dealt_avg_price"] or price
@@ -1064,6 +1073,7 @@ def run_once(
             env_label=env_label,
             confirmed=confirmed,
             portfolio_state=risk_state,
+            audit_intent="ENTRY",
         )
         if confirmed and fill["dealt_qty"] > 0:
             filled_qty = int(fill["dealt_qty"])
@@ -1245,6 +1255,7 @@ def run_once(
                             qty=qty, price=qqq_price,
                             trd_env=trd_env, env_label=env_label, confirmed=confirmed,
                             portfolio_state=risk_state,
+                            audit_intent="QQQ_CORE_BUY",
                         )
                         if confirmed and fill["dealt_qty"] > 0:
                             filled_qty = int(fill["dealt_qty"])
@@ -1620,7 +1631,7 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
                       f"@{order.price:.4f}（{order.reason}，优先级{order.priority}）")
             _place_order(code=order.code, side="SELL", qty=order.sell_qty, price=order.price,
                         trd_env=trd_env, env_label=env_label, confirmed=False,
-                        portfolio_state=portfolio_state)
+                        portfolio_state=portfolio_state, audit_intent="EMERGENCY_REBALANCE_PREVIEW")
             previewed.append({"code": order.code, "sell_qty": order.sell_qty,
                               "price": order.price, "reason": order.reason})
         return previewed
@@ -1670,7 +1681,7 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
                       f"（{order.reason}，优先级{order.priority}，第{i + 1}笔）")
             fill = _place_order(code=order.code, side="SELL", qty=sell_qty, price=order.price,
                                 trd_env=trd_env, env_label=env_label, confirmed=True,
-                                portfolio_state=portfolio_state)
+                                portfolio_state=portfolio_state, audit_intent="EMERGENCY_REBALANCE")
             if fill["dealt_qty"] <= 0:
                 alert.error(f"再平衡：{order.code}未成交（{fill['status']}），停止本轮再平衡，"
                             f"等待下次评估重新计算")
@@ -1794,7 +1805,7 @@ def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed:
             alert.log(preview_msg + "（较上次推送变化不大，本轮不重复推送）")
         _place_order(code=order.code, side="SELL", qty=order.sell_qty, price=order.price,
                     trd_env=trd_env, env_label=env_label, confirmed=False,
-                    portfolio_state=portfolio_state)
+                    portfolio_state=portfolio_state, audit_intent="QQQ_TRIM_PREVIEW")
         return [{"code": order.code, "sell_qty": order.sell_qty,
                  "price": order.price, "reason": order.reason}]
 
@@ -1826,7 +1837,7 @@ def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed:
         alert.info(f"QQQ CORE trim 卖出 {order.code} {sell_qty}股 @{order.price:.4f}（{order.reason}）")
         fill = _place_order(code=order.code, side="SELL", qty=sell_qty, price=order.price,
                             trd_env=trd_env, env_label=env_label, confirmed=True,
-                            portfolio_state=portfolio_state)
+                            portfolio_state=portfolio_state, audit_intent="QQQ_TRIM")
         if fill["dealt_qty"] <= 0:
             alert.error(f"QQQ CORE trim：{order.code}未成交（{fill['status']}），停止")
             return []
@@ -1925,6 +1936,7 @@ def _attempt_active_replacement(portfolio: Portfolio, incoming_code: str, incomi
         code=victim_code, side="SELL", qty=victim_pos["qty"], price=victim_price,
         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
         portfolio_state=portfolio_state,
+        audit_intent="REPLACEMENT_EXIT",
     )
     if confirmed and fill["dealt_qty"] < victim_pos["qty"]:
         alert.error(f"主动置换卖出{victim_code}未完全成交"
@@ -1978,6 +1990,35 @@ def _place_order(
     env_label: str,
     confirmed: bool,
     portfolio_state: Optional[PortfolioState] = None,
+    audit_intent: Optional[str] = None,
+) -> dict:
+    """V3.6 P5 Execution Audit wrapper — record-only. Opens an
+    engine/order_audit.py row (intent = why this order exists, e.g.
+    ENTRY / STOP_OR_STRATEGY_EXIT), runs _place_order_unaudited() unchanged,
+    classifies the outcome, and returns the broker's result object as-is.
+    The audit never raises and never alters the result; an exception from
+    the order path is recorded and re-raised untouched."""
+    order_audit.begin(code, side, qty, price, trd_env, env_label, confirmed,
+                      intent=audit_intent)
+    try:
+        result = _place_order_unaudited(code, side, qty, price, trd_env, env_label,
+                                        confirmed, portfolio_state)
+    except BaseException as exc:
+        order_audit.finish(exc=exc, confirmed=confirmed)
+        raise
+    order_audit.finish(result, confirmed=confirmed)
+    return result
+
+
+def _place_order_unaudited(
+    code: str,
+    side: str,
+    qty: int,
+    price: float,
+    trd_env,
+    env_label: str,
+    confirmed: bool,
+    portfolio_state: Optional[PortfolioState] = None,
 ) -> dict:
     """
     Place an order via whichever broker engine.broker.get_broker(code)
@@ -2012,6 +2053,12 @@ def _place_order(
         except Exception as exc:
             alert.log(f"risk_engine: evaluate failed for {code} "
                       f"({exc.__class__.__name__}: {exc}) — failing open, order proceeds unevaluated")
+        if risk_decision is not None:
+            order_audit.stage("RISK_EVALUATED", risk_status=risk_decision.status.value,
+                              risk_reason=risk_decision.reason, risk_mode=config.RISK_ENGINE_MODE)
+        else:
+            order_audit.stage("RISK_EVALUATED", risk_status="EVALUATION_FAILED",
+                              risk_mode=config.RISK_ENGINE_MODE)
 
         if risk_decision is not None and config.RISK_ENGINE_MODE == "ENFORCE":
             should_block = risk_decision.status.value == "BLOCK" or (
@@ -2021,15 +2068,26 @@ def _place_order(
                             f"（{risk_decision.status.value}）: {risk_decision.reason}")
                 return {"order_id": "", "dealt_qty": 0.0, "dealt_avg_price": 0.0,
                         "status": "RISK_BLOCKED"}
+    else:
+        order_audit.stage("RISK_EVALUATED", risk_status="NOT_EVALUATED",
+                          risk_reason=("no portfolio_state" if portfolio_state is None
+                                       else "risk engine disabled/OFF"),
+                          risk_mode=config.RISK_ENGINE_MODE)
 
     if confirmed and config.PREFLIGHT_ENABLED:
         result = market_preflight.check(code)
+        order_audit.stage("PREFLIGHT", preflight_status="PASS" if result.ok else "FAIL",
+                          preflight_reason=result.reason)
         if not result.ok:
             alert.error(f"{code} preflight检查未通过（{result.reason}），取消下单")
             return {"order_id": "", "dealt_qty": 0.0, "dealt_avg_price": 0.0,
                     "status": "PREFLIGHT_FAILED"}
+    else:
+        order_audit.stage("PREFLIGHT", preflight_status="SKIPPED",
+                          preflight_reason="dry run" if not confirmed else "PREFLIGHT_ENABLED=False")
 
     broker = get_broker(code)
+    order_audit.stage("BROKER_SELECTED", broker=getattr(broker, "__name__", type(broker).__name__))
     return broker.place_order(
         code=code, side=side, qty=qty, price=price,
         trd_env=trd_env, env_label=env_label, confirmed=confirmed,
