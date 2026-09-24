@@ -64,6 +64,7 @@ _LIVE_PATH_ATTRS = [
     ("position_manager", "POSITION_MANAGER_LOG_PATH"),
     ("position_manager.state_store", "_STORE_PATH"),
     ("regime", "REGIME_LOG_PATH"),
+    ("research.trade_intelligence_data", "_RISK_STATE_LOG_PATH"),
 ]
 
 _isolation_stack: list = []

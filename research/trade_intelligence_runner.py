@@ -2,9 +2,11 @@
 research/trade_intelligence_runner.py — V3.6-A Trade Intelligence
 orchestration entry point (spec section 十七/十八, V3.6-A only).
 
-Pure research/shadow-mode pipeline: trade_intelligence_data.load_dataset()
--> run the four in-scope analysis modules (Early Failure, Exit,
-Signal/Confidence, Position Size) -> each analyze() already gates its own
+Pure research/shadow-mode pipeline: trade_intelligence_data.load_population()
+(every trade, classified; nothing silently dropped) -> data quality report
+(trade_intelligence_quality) -> the INCLUDED rows + trajectory -> run the
+four in-scope analysis modules (Early Failure, Exit, Signal/Confidence,
+Position Size) -> each analyze() already gates its own
 findings through trade_intelligence_patterns.classify_state() -> upsert the
 kept patterns into the V3.6-A research DB -> generate + write a report.
 
@@ -16,7 +18,11 @@ editing engine/runner.py, which this round of work was explicitly told to
 avoid).
 
 Usage:
-    python -m research.trade_intelligence_runner [--execution PAPER]
+    python -m research.trade_intelligence_runner [--execution PAPER] [--no-inferred]
+
+--no-inferred drops the INFERRED_REAL legacy rows (execution NULL, see
+trade_intelligence_data's module docstring) from the analyzed set; they are
+still classified and counted in the data quality report.
 """
 import uuid
 from datetime import datetime
@@ -28,6 +34,7 @@ from research import trade_intelligence_early_failure as early_failure
 from research import trade_intelligence_exit as exit_analysis
 from research import trade_intelligence_signal_confidence as signal_confidence
 from research import trade_intelligence_position_size as position_size
+from research import trade_intelligence_quality as quality
 from research import trade_intelligence_report as report
 from research.trade_intelligence_narrative import get_narrative_provider
 from research.trade_intelligence_store import TradeIntelligenceStore
@@ -39,7 +46,9 @@ _ANALYSIS_MODULES = (early_failure, exit_analysis, signal_confidence, position_s
 def refresh(source_db_path: Optional[Path] = None,
             research_db_path: Optional[Path] = None,
             report_dir: Optional[Path] = None,
-            execution: Optional[str] = "REAL") -> dict:
+            execution: Optional[str] = "REAL",
+            include_inferred: bool = True,
+            risk_log_path: Optional[Path] = None) -> dict:
     """Run one full V3.6-A analysis pass. source_db_path/research_db_path/
     report_dir let tests point at temp paths instead of the production
     trade_history.db / trade_intelligence.db / reports dir — see
@@ -49,7 +58,15 @@ def refresh(source_db_path: Optional[Path] = None,
     resolved_source = str(source_db_path or data._DB_PATH)
     store = TradeIntelligenceStore(db_path=research_db_path)
     try:
-        df = data.load_dataset(source_db_path, execution=execution)
+        population = data.load_population(source_db_path, execution=execution,
+                                          include_inferred=include_inferred,
+                                          risk_log_path=risk_log_path)
+        quality_report = quality.build_quality_report(
+            population, run_id=run_id,
+            selection={"execution": execution, "include_inferred": include_inferred})
+        quality_paths = quality.write_quality_report(quality_report, report_dir=report_dir)
+        store.record_data_quality(run_id, quality_report)
+        df = data.attach_trajectory(data.included(population), source_db_path)
 
         patterns = []
         for module in _ANALYSIS_MODULES:
@@ -68,6 +85,9 @@ def refresh(source_db_path: Optional[Path] = None,
             "n_trades_analyzed": int(len(df)) if df is not None else 0,
             "n_patterns_total": len(patterns),
             "n_candidate_patterns": n_candidate, "n_observations": n_observation,
+            "n_trades_total": quality_report["population"]["total"],
+            "inclusion": quality_report["population"].get("inclusion", {}),
+            "data_quality_report_path": str(quality_paths.get("run_md")),
         }
 
         provider = get_narrative_provider()
@@ -101,5 +121,5 @@ if __name__ == "__main__":
     execution = "REAL"
     if "--execution" in sys.argv:
         execution = sys.argv[sys.argv.index("--execution") + 1]
-    summary = refresh(execution=execution)
+    summary = refresh(execution=execution, include_inferred="--no-inferred" not in sys.argv)
     print(f"V3.6-A Trade Intelligence refresh complete: {summary}")

@@ -8,12 +8,15 @@ conventions (WAL mode, module-level write lock, upsert-merge-by-primary-key
 OBSERVATION -> CANDIDATE_PATTERN as more data accumulates across refreshes,
 but the row itself is never deleted so its history stays visible).
 
-Three tables:
+Four tables:
   patterns          — one row per (analysis_type, pattern_key), upserted.
   pattern_history    — append-only, one row per (pattern, refresh) snapshot,
       mirroring research/early_failure_monitor.py's signal_summary_history
       convention so promotions/regressions are visible as a time series.
   research_runs      — one row per refresh() call (run metadata + status).
+  data_quality_runs  — one row per refresh() call: the population breakdown +
+      field fill-rate report (research/trade_intelligence_quality.py), kept so
+      data completeness can be tracked across runs.
 
 `state` is restricted to OBSERVATION/CANDIDATE_PATTERN in Python
 (upsert_pattern raises ValueError otherwise) — matching
@@ -87,6 +90,14 @@ CREATE TABLE IF NOT EXISTS research_runs (
     report_path           TEXT,
     status                TEXT,
     error_message         TEXT
+);
+
+CREATE TABLE IF NOT EXISTS data_quality_runs (
+    run_id          TEXT PRIMARY KEY,
+    created_at      TEXT,
+    n_trades_total  INTEGER,
+    n_analyzed      INTEGER,
+    report_json     TEXT
 );
 """
 
@@ -186,6 +197,23 @@ class TradeIntelligenceStore:
                  n_observations, report_path, status, error_message),
             )
             self._conn.commit()
+
+    def record_data_quality(self, run_id: str, report: dict) -> None:
+        pop = report.get("population", {})
+        with _write_lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO data_quality_runs (
+                    run_id, created_at, n_trades_total, n_analyzed, report_json
+                ) VALUES (?,?,?,?,?)""",
+                (run_id, datetime.now().isoformat(), pop.get("total"), pop.get("analyzed"),
+                 json.dumps(report, ensure_ascii=False, default=str)),
+            )
+            self._conn.commit()
+
+    def data_quality_history(self) -> pd.DataFrame:
+        return pd.read_sql_query(
+            "SELECT run_id, created_at, n_trades_total, n_analyzed FROM data_quality_runs "
+            "ORDER BY created_at", self._conn)
 
     def all_patterns(self, state: Optional[str] = None) -> pd.DataFrame:
         if state is None:
