@@ -159,6 +159,25 @@ def run_trade(
             print(f"\n{msg}")
         return
 
+    # ── Step 5b: V3.6 P7 duplicate-BUY guard ──────────────────────────────────
+    # This CLI places orders directly (not via engine/runner._place_order), so
+    # it checks the same guard itself: an unresolved earlier order for this
+    # code (order_audit.db) blocks the BUY. The broker/local position-mismatch
+    # rule needs a run_once() pass snapshot and does not apply here. SELL and
+    # the order path below are unchanged.
+    if direction == "BUY":
+        from engine import execution_guard
+        guard_reason = execution_guard.check_buy(code, trd_env_label)
+        if guard_reason:
+            out = {**preview, "status": "EXECUTION_GUARD_BLOCKED", "guard_reason": guard_reason}
+            _audit({"action": "place_order", "result": "EXECUTION_GUARD_BLOCKED", **out})
+            if output_json:
+                print(json.dumps(out, ensure_ascii=False, indent=2))
+            else:
+                print(f"\n[EXECUTION_GUARD_BLOCKED] BUY not placed — {guard_reason}")
+                print("Inspect with: python -m engine.execution_guard list")
+            return
+
     # ── Step 6: Place the order ───────────────────────────────────────────────
     from moomoo import RET_OK, TrdSide, OrderType, TrdEnv
 

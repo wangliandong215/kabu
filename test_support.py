@@ -88,6 +88,13 @@ def isolate_live_state() -> None:
         orig = getattr(mod, attr)
         saved.append((mod, attr, orig))
         setattr(mod, attr, Path(tmp.name) / mod_name.replace(".", "_") / Path(orig).name)
+    # V3.6 P7: the order-audit in-process unresolved-order mirror is state
+    # too — a fresh one per module, so an unresolved order left by one
+    # module's test can never make another module's run_once() reconcile
+    # against a (possibly live) broker.
+    oa = importlib.import_module("engine.order_audit")
+    saved.append((oa, "_unresolved_mem", oa._unresolved_mem))
+    oa._unresolved_mem = {}
     _isolation_stack.append((tmp, saved))
 
 

@@ -29,6 +29,8 @@ the order to a terminal state (or cancelling it) before returning.
 """
 import time
 import uuid
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 import notify.alert as alert
 from common import infer_market, make_trade_ctx, safe_close
@@ -43,7 +45,10 @@ class MoomooBroker:
     _POLL_ATTEMPTS = 6
     _POLL_INTERVAL_SEC = 1.5
     # Terminal states where dealt_qty is final and won't change further.
-    _TERMINAL = {"FILLED_ALL", "CANCELLED_ALL", "FAILED", "DISABLED",
+    # CANCELLED_PART (V3.6 P7.3) = part filled, remainder cancelled; it used
+    # to be missing, so such an order was polled to timeout, cancelled a
+    # second time and recorded as unconfirmed.
+    _TERMINAL = {"FILLED_ALL", "CANCELLED_ALL", "CANCELLED_PART", "FAILED", "DISABLED",
                  "DELETED", "SUBMIT_FAILED", "FILL_CANCELLED"}
 
     @staticmethod
@@ -159,6 +164,76 @@ class MoomooBroker:
             safe_close(trd_ctx)
 
         return result
+
+    # ── V3.6 P7 reconciliation helpers (engine/execution_guard.py) ─────────────
+
+    @staticmethod
+    def query_orders(code: str, trd_env, order_id: str = "",
+                     since_date: Optional[str] = None) -> Tuple[bool, List[dict]]:
+        """Read-only lookup of broker orders for `code`: today's orders
+        (order_list_query), plus history_order_list_query from `since_date`
+        (YYYY-MM-DD) when given. Filtered to `order_id` when given.
+        Returns (ok, rows); ok=False when any query failed or raised, so the
+        caller never mistakes "could not look" for "not there"."""
+        import moomoo as ft
+
+        trd_ctx = make_trade_ctx(infer_market(code))
+        rows: Dict[str, dict] = {}
+        ok = True
+        try:
+            queries = [("today", lambda: trd_ctx.order_list_query(
+                order_id=order_id, code=code, trd_env=trd_env))]
+            if since_date:
+                queries.append(("history", lambda: trd_ctx.history_order_list_query(
+                    code=code, start=since_date, end=datetime.now().strftime("%Y-%m-%d"),
+                    trd_env=trd_env)))
+            for _name, q in queries:
+                try:
+                    ret, data = q()
+                except Exception:
+                    ok = False
+                    continue
+                if ret != ft.RET_OK:
+                    ok = False
+                    continue
+                if data is None:
+                    continue
+                for _, r in data.iterrows():
+                    oid = str(r.get("order_id", "") or order_id)
+                    if order_id and oid != str(order_id):
+                        continue
+                    rows[oid] = {
+                        "order_id": oid,
+                        "code": str(r.get("code", code) or code),
+                        "trd_side": str(r.get("trd_side", "") or ""),
+                        "qty": float(r.get("qty", 0) or 0),
+                        "price": float(r.get("price", 0) or 0),
+                        "order_status": str(r.get("order_status", "") or ""),
+                        "dealt_qty": float(r.get("dealt_qty", 0) or 0),
+                        "dealt_avg_price": float(r.get("dealt_avg_price", 0) or 0),
+                        "create_time": str(r.get("create_time", "") or ""),
+                        "updated_time": str(r.get("updated_time", "") or ""),
+                    }
+        finally:
+            safe_close(trd_ctx)
+        return ok, list(rows.values())
+
+    @staticmethod
+    def cancel_order(code: str, order_id: str, trd_env) -> Tuple[bool, str]:
+        """Cancel a still-open order found during reconciliation. Returns (ok, error)."""
+        import moomoo as ft
+
+        trd_ctx = make_trade_ctx(infer_market(code))
+        try:
+            out = trd_ctx.modify_order(modify_order_op=ft.ModifyOrderOp.CANCEL,
+                                       order_id=order_id, qty=0, price=0, trd_env=trd_env)
+            if isinstance(out, tuple) and len(out) == 2 and out[0] != ft.RET_OK:
+                return False, str(out[1])
+            return True, ""
+        except Exception as exc:
+            return False, f"{exc.__class__.__name__}: {exc}"
+        finally:
+            safe_close(trd_ctx)
 
 
 class PaperBroker:

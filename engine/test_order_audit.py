@@ -5,10 +5,12 @@ MoomooBroker. The real MoomooBroker.place_order() runs against a fake
 `moomoo` SDK + fake trade context (never OpenD, never a real order); the
 audit DB is a temp file (test_support.isolate_live_state).
 
-Also contains the end-to-end reproduction of the known P7 gap: broker
+Also contains the end-to-end duplicate-BUY scenario P7 fixed: broker
 accepts a BUY, polling then fails, MoomooBroker returns dealt_qty=0, local
-state records nothing, and the NEXT pass submits the same BUY again even
-though the broker already holds the position.
+state records nothing. Before P7 the NEXT pass submitted the same BUY again
+although the broker already held the position; now the next pass reconciles
+first and the BUY is blocked (engine/execution_guard.py). The rest of the
+P7 tests live in engine/test_execution_guard.py and reuse the fakes here.
 
 Run:  python -m unittest engine.test_order_audit -v
 """
@@ -49,15 +51,20 @@ class FakeTradeCtx:
     """Scriptable stand-in for moomoo's OpenSecTradeContext.
     place: ("ok", order_id) | ("reject", msg) | ("raise", exc)
     polls: list of ("row", status, dealt, avg) | ("error",) | ("raise", exc);
-           the last entry repeats.
-    recheck: same shape, used for the post-cancel query."""
+           the last entry repeats. Answers every order_list_query(order_id=...).
+    recheck: same shape, used for the post-cancel query.
+    search: rows (dicts) answered to order_list_query without an order_id
+            (P7 lost-response search), or ("error",).
+    history: rows answered by history_order_list_query, or ("error",)."""
 
     def __init__(self, place=("ok", "OID1"), polls=(("row", "FILLED_ALL", 10, 101.0),),
-                 recheck=None, cancel=None):
+                 recheck=None, cancel=None, search=(), history=()):
         self.place, self.polls, self.recheck, self.cancel = place, list(polls), recheck, cancel
+        self.search, self.history = search, history
         self.poll_i = 0
         self.cancelled = False
         self.place_calls = 0
+        self.cancel_calls = 0
 
     def place_order(self, **kw):
         self.place_calls += 1
@@ -68,25 +75,38 @@ class FakeTradeCtx:
             return RET_ERROR, val
         return RET_OK, pd.DataFrame({"order_id": [val]})
 
-    def _answer(self, spec):
+    def _answer(self, spec, order_id):
         if spec[0] == "raise":
             raise spec[1]
         if spec[0] == "error":
             return RET_ERROR, "query failed"
         _, status, dealt, avg = spec
-        return RET_OK, pd.DataFrame([{"order_status": status, "dealt_qty": dealt,
+        return RET_OK, pd.DataFrame([{"order_id": order_id, "code": "US.TEST",
+                                      "order_status": status, "dealt_qty": dealt,
                                       "dealt_avg_price": avg,
                                       "create_time": "2026-09-25 10:00:00",
                                       "updated_time": "2026-09-25 10:00:01"}])
 
-    def order_list_query(self, order_id, trd_env):
+    @staticmethod
+    def _rows(spec):
+        if tuple(spec) == ("error",):
+            return RET_ERROR, "query failed"
+        return RET_OK, pd.DataFrame(list(spec))
+
+    def order_list_query(self, order_id="", code="", trd_env=None, **kw):
+        if not order_id:
+            return self._rows(self.search)
         if self.cancelled and self.recheck is not None:
-            return self._answer(self.recheck)
+            return self._answer(self.recheck, order_id)
         spec = self.polls[min(self.poll_i, len(self.polls) - 1)]
         self.poll_i += 1
-        return self._answer(spec)
+        return self._answer(spec, order_id)
+
+    def history_order_list_query(self, **kw):
+        return self._rows(self.history)
 
     def modify_order(self, **kw):
+        self.cancel_calls += 1
         if self.cancel is not None:
             raise self.cancel
         self.cancelled = True
@@ -111,7 +131,14 @@ class _AuditCase(unittest.TestCase):
         config.PREFLIGHT_ENABLED = False
         self.ctx = FakeTradeCtx()
         broker_mod.make_trade_ctx = lambda market=None: self.ctx
-        self.run_id = f"run-{self.id()}"          # isolates rows per test in the shared DB
+        self.run_id = f"run-{self.id()}"
+        # A fresh audit DB (and in-process unresolved mirror) per test: since
+        # P7, an unresolved order left by one test would block the next
+        # test's BUY of the same code.
+        self._db_tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self._orig_db, self._orig_mem = oa._DB_PATH, oa._unresolved_mem
+        oa._DB_PATH = Path(self._db_tmp.name) / "order_audit.db"
+        oa._unresolved_mem = {}
         oa.start_pass(run_id=self.run_id, env_label="SIMULATE")
 
     def tearDown(self):
@@ -127,6 +154,8 @@ class _AuditCase(unittest.TestCase):
         config.RISK_ENGINE_MODE = self._orig["RISK_ENGINE_MODE"]
         runner.market_preflight.check = self._orig["preflight"]
         runner.risk_engine_evaluate = self._orig["risk_eval"]
+        oa._DB_PATH, oa._unresolved_mem = self._orig_db, self._orig_mem
+        self._db_tmp.cleanup()
         test_support.unmute_alert_file_logging(self._alert)
 
     def _order(self, side="BUY", qty=10, price=100.0, confirmed=True, intent="ENTRY", **kw):
@@ -178,8 +207,9 @@ class LifecycleTest(_AuditCase):
                     "finished_at", "broker_updated_time"):
             self.assertTrue(row[col], col)
         self.assertEqual(self._stages(row["audit_id"]),
-                         ["DECISION", "RISK_EVALUATED", "PREFLIGHT", "BROKER_SELECTED",
-                          "SUBMIT_SENT", "ACK", "POLL", "FINISH"])
+                         ["DECISION", "EXECUTION_GUARD", "RISK_EVALUATED", "PREFLIGHT",
+                          "BROKER_SELECTED", "SUBMIT_SENT", "ACK", "POLL", "FINISH"])
+        self.assertEqual(row["guard_status"], "PASS")
 
     def test_sell_slippage_sign(self):
         self.ctx.polls = [("row", "FILLED_ALL", 10, 99.0)]
@@ -194,8 +224,10 @@ class LifecycleTest(_AuditCase):
         fill = self._order()
         self.assertEqual(fill["dealt_qty"], 4.0)
         row = self._last()
-        # CANCELLED_PART is not in the broker's terminal set -> not confirmed
-        self.assertEqual(row["outcome"], oa.UNCONFIRMED_AFTER_ACK)
+        # P7.3: CANCELLED_PART is terminal -> partial fill + remainder
+        # cancelled. (Before P7 this was UNCONFIRMED_AFTER_ACK.)
+        self.assertEqual(row["outcome"], oa.PARTIAL_FILLED)
+        self.assertEqual((row["needs_reconcile"], row["dealt_qty"]), (0, 4.0))
         self.ctx = FakeTradeCtx(polls=[("row", "SUBMITTED", 4, 100.0)],
                                 recheck=("row", "FILL_CANCELLED", 4, 100.0))
         fill = self._order()
@@ -281,6 +313,9 @@ class UnconfirmedStateTest(_AuditCase):
         self.assertEqual((row["fill_confirmed"], row["needs_reconcile"]), (0, 1))
         self.assertIn("OpenD dropped", row["exception"])
         self.assertIn("EXCEPTION", self._stages(row["audit_id"]))
+        self.assertEqual((row["unknown_reason"], row["reconcile_status"]),
+                         ("EXCEPTION_AFTER_ACK", oa.RECONCILE_PENDING))
+        self.assertIn("UNKNOWN", self._stages(row["audit_id"]))
 
     def test_all_polls_fail_and_cancel_fails(self):
         self.ctx.polls = [("error",)]
@@ -292,6 +327,8 @@ class UnconfirmedStateTest(_AuditCase):
         self.assertEqual(row["outcome"], oa.UNCONFIRMED_AFTER_ACK)
         self.assertEqual(row["poll_failures"], 7)            # 6 polls + post-cancel recheck
         self.assertIn("cancel refused", row["cancel_error"])
+        self.assertEqual(row["unknown_reason"], "ALL_POLLS_FAILED_AND_CANCEL_FAILED")
+        self.assertEqual(row["order_id"], "OID1")
 
     def test_place_order_raises_outcome_unknown(self):
         self.ctx.place = ("raise", TimeoutError("response lost"))
@@ -300,6 +337,7 @@ class UnconfirmedStateTest(_AuditCase):
         row = self._last()
         self.assertEqual(row["outcome"], oa.SUBMIT_OUTCOME_UNKNOWN)
         self.assertEqual(row["needs_reconcile"], 1)
+        self.assertEqual(row["unknown_reason"], "SUBMIT_EXCEPTION_AFTER_SEND")
 
     def test_exception_before_submit_is_recorded_and_reraised(self):
         def _boom(market=None):
@@ -363,13 +401,10 @@ class _FakeTracker:
         return lambda *a, **kw: None
 
 
-class DuplicateBuyReproductionTest(_AuditCase):
-    """Two real run_once() passes, real _place_order + real MoomooBroker
-    against a fake SDK. Pass 1: broker accepts the BUY, polling raises ->
-    dealt_qty=0 returned, local portfolio records nothing. Pass 2: the broker
-    now reports the position (it did fill), local still doesn't -> the same
-    BUY is submitted again. Documents the CURRENT behavior; when P7 lands,
-    this test must be flipped to assert exactly one submission."""
+class _RunOnceHarness(_AuditCase):
+    """Real run_once() + real _place_order + real MoomooBroker against a fake
+    SDK; everything else run_once() touches is stubbed. No tests here (also
+    subclassed by engine/test_execution_guard.py)."""
 
     def setUp(self):
         super().setUp()
@@ -438,34 +473,71 @@ class DuplicateBuyReproductionTest(_AuditCase):
         self._tmp.cleanup()
         super().tearDown()
 
+    def _pass(self, confirmed=True):
+        runner.run_once(codes=["US.TEST"], confirmed=confirmed, auto_route=False,
+                        strategy_name="atr_breakout", run_id=self.run_id)
+
+    def _entries(self):
+        return [r for r in self._rows() if r["intent"] == "ENTRY"]
+
+    def _broker_holds(self, qty):
+        self.broker_positions = {"US.TEST": BrokerPosition(
+            code="US.TEST", qty=qty, cost_price=100.0,
+            market_val=100.0 * qty, current_price=100.0)}
+
+
+class DuplicateBuyReproductionTest(_RunOnceHarness):
+    """Two real run_once() passes. Pass 1: broker accepts the BUY, polling
+    raises -> dealt_qty=0 returned, local portfolio records nothing.
+    Pass 2: before P7 the same BUY was submitted again (this test used to
+    assert exactly that). Now pass 2 reconciles OID1 first and the BUY is
+    blocked — exactly one BUY ever reaches the broker."""
+
     def test_known_p7_gap_duplicate_buy_after_unconfirmed_fill(self):
         Portfolio(path=self.pf_path)._save()
         self.ctx.polls = [("raise", ConnectionError("OpenD dropped after ACK"))]
 
-        runner.run_once(codes=["US.TEST"], confirmed=True, auto_route=False,
-                        strategy_name="atr_breakout", run_id=self.run_id)
-        first_qty = None
-        rows = [r for r in self._rows() if r["intent"] == "ENTRY"]
+        self._pass()
+        rows = self._entries()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["outcome"], oa.UNCONFIRMED_AFTER_ACK)
+        self.assertEqual(self.ctx.place_calls, 1)
         first_qty = rows[0]["requested_qty"]
         self.assertNotIn("US.TEST", Portfolio(path=self.pf_path).data["positions"])
 
-        # Between passes the broker actually filled the order.
-        self.broker_positions = {"US.TEST": BrokerPosition(
-            code="US.TEST", qty=first_qty, cost_price=100.0,
-            market_val=100.0 * first_qty, current_price=100.0)}
+        # Between passes the broker actually filled OID1.
+        self._broker_holds(first_qty)
         self.ctx = FakeTradeCtx(place=("ok", "OID2"),
                                 polls=[("row", "FILLED_ALL", first_qty, 100.0)])
 
-        runner.run_once(codes=["US.TEST"], confirmed=True, auto_route=False,
-                        strategy_name="atr_breakout", run_id=self.run_id)
-        rows = [r for r in self._rows() if r["intent"] == "ENTRY"]
-        # KNOWN GAP (P7): a second BUY reaches the broker although the broker
-        # already holds US.TEST — local-only "already held" check.
+        self._pass()
+        rows = self._entries()
+        # Reconcile confirmed OID1's real fill, which the book never recorded.
+        first = rows[0]
+        self.assertEqual((first["reconcile_status"], first["reconciled_outcome"],
+                          first["reconciled_dealt_qty"], first["needs_manual"]),
+                         (oa.RECONCILE_NEEDS_MANUAL, oa.FILLED, first_qty, 1))
+        self.assertIn("RECONCILE_END", self._stages(first["audit_id"]))
+        # The second BUY never reached the broker.
+        self.assertEqual(self.ctx.place_calls, 0)
         self.assertEqual(len(rows), 2)
-        self.assertEqual(self.ctx.place_calls, 1)
-        self.assertEqual(rows[1]["outcome"], oa.FILLED)
+        self.assertEqual(rows[1]["outcome"], oa.EXECUTION_GUARD_BLOCKED)
+        self.assertIn("UNRESOLVED_ORDER", rows[1]["guard_reason"])
+        self.assertIn("POSITION_MISMATCH", rows[1]["guard_reason"])
+        self.assertEqual(sum(1 for r in rows if r["order_id"]), 1)   # one real BUY in total
+
+    def test_second_pass_order_still_unknown_blocks_buy(self):
+        Portfolio(path=self.pf_path)._save()
+        self.ctx.polls = [("raise", ConnectionError("OpenD dropped after ACK"))]
+        self._pass()
+        # Pass 2: this order still can't be queried; no position visible yet.
+        self.ctx = FakeTradeCtx(place=("ok", "OID2"), polls=[("error",)])
+        self._pass()
+        rows = self._entries()
+        self.assertEqual(self.ctx.place_calls, 0)
+        self.assertEqual(rows[0]["reconcile_status"], oa.RECONCILE_UNRESOLVED)
+        self.assertEqual(rows[1]["outcome"], oa.EXECUTION_GUARD_BLOCKED)
+        self.assertNotIn("POSITION_MISMATCH", rows[1]["guard_reason"])
 
 
 def setUpModule():

@@ -28,6 +28,7 @@ from engine import pipeline
 from engine import scoring
 from engine import entry_quality
 from engine import event_risk
+from engine import execution_guard
 from engine import market_preflight
 from engine import order_audit
 from engine import regime
@@ -163,6 +164,12 @@ def run_once(
     # V3.6 P5 Execution Audit: one pass_id per run_once(), shared by every
     # order audited this pass (record-only, see engine/order_audit.py).
     order_audit.start_pass(run_id=run_id, env_label=env_label)
+    # V3.6 P7: settle any earlier order whose broker outcome is still unknown
+    # before this pass can place anything (see engine/execution_guard.py).
+    # No broker call when nothing is unresolved; never raises.
+    if not is_jp_pass:
+        execution_guard.reconcile_pending(trd_env=trd_env, env_label=env_label,
+                                          confirmed=confirmed)
 
     # ── Portfolio-level guard ─────────────────────────────────────────────────
     # 2026-07-11 fix: this used to `return` here, which skipped scan() and the
@@ -382,6 +389,8 @@ def run_once(
             risk_state = build_portfolio_state(broker_state, portfolio)
 
             diffs = portfolio_risk_manager.reconcile(broker_state, portfolio.data["positions"])
+            # V3.6 P7: a non-ignored broker/local qty diff blocks BUYs of that code this pass.
+            execution_guard.note_position_diffs(diffs, config.RECONCILIATION_IGNORE_CODES, env_label)
             diff_grew = portfolio_risk_manager.check_and_update_diff_growth(diffs)
             for d in diffs:
                 portfolio_risk_manager.log_diff(d)
@@ -1997,9 +2006,24 @@ def _place_order(
     ENTRY / STOP_OR_STRATEGY_EXIT), runs _place_order_unaudited() unchanged,
     classifies the outcome, and returns the broker's result object as-is.
     The audit never raises and never alters the result; an exception from
-    the order path is recorded and re-raised untouched."""
+    the order path is recorded and re-raised untouched.
+
+    V3.6 P7: every BUY first passes engine/execution_guard.check_buy() — an
+    unresolved earlier order for the code, or a broker/local position
+    mismatch this pass, returns a zero-fill EXECUTION_GUARD_BLOCKED result
+    (same shape as RISK_BLOCKED) without reaching risk/preflight/broker."""
     order_audit.begin(code, side, qty, price, trd_env, env_label, confirmed,
                       intent=audit_intent)
+    if side == "BUY":
+        guard_reason = execution_guard.check_buy(code, env_label)
+        order_audit.stage("EXECUTION_GUARD", guard_status="BLOCK" if guard_reason else "PASS",
+                          guard_reason=guard_reason)
+        if guard_reason:
+            alert.error(f"{code} BUY {qty}股 被 Execution Guard 拦截（防重复买入）: {guard_reason}")
+            result = {"order_id": "", "dealt_qty": 0.0, "dealt_avg_price": 0.0,
+                      "status": order_audit.EXECUTION_GUARD_BLOCKED}
+            order_audit.finish(result, confirmed=confirmed)
+            return result
     try:
         result = _place_order_unaudited(code, side, qty, price, trd_env, env_label,
                                         confirmed, portfolio_state)
