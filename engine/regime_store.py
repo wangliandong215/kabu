@@ -23,7 +23,7 @@ import os
 import threading
 from pathlib import Path
 
-_STORE_PATH = Path(__file__).parent / "regime_state.json"
+_STORE_PATH = Path(r"C:\KabuData\regime\regime_state.json")
 _write_lock = threading.Lock()
 
 
@@ -41,6 +41,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     with _write_lock:
+        _STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
         tmp = _STORE_PATH.with_suffix(".tmp")
         try:
             with open(tmp, "w", encoding="utf-8") as f:

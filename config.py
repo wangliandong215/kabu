@@ -3,7 +3,30 @@ kabu — configuration
 All tuneable parameters in one place.
 Override any value via environment variable or edit this file directly.
 """
+import json
 import os
+
+# ── Secrets file ──────────────────────────────────────────────────────────────
+# Telegram token/chat id etc. can live in this JSON file ({"ENV_NAME": "value"})
+# so they travel with the C:\KabuData folder on a machine move. A real
+# environment variable always wins; empty values in the file are ignored.
+SECRETS_FILE: str = r"C:\KabuData\secrets.json"
+
+
+def _load_secrets_file(path: str = SECRETS_FILE) -> None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    for key, value in data.items():
+        if isinstance(value, str) and value and not os.environ.get(key):
+            os.environ[key] = value
+
+
+_load_secrets_file()
 
 # ── Connection ────────────────────────────────────────────────────────────────
 OPEND_HOST: str  = os.getenv("FUTU_HOST",          "127.0.0.1")
@@ -1267,7 +1290,8 @@ NOTIFY_MUTE_FILE: str = r"C:\KabuData\notify_paused.flag"
 # weeks) is pushed once when it starts, not once per day / per restart.
 NOTIFY_STATE_FILE: str = r"C:\KabuData\notify_state.json"
 
-# Set env vars KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID to receive Telegram alerts.
+# Set KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID (env vars, or in
+# SECRETS_FILE above) to receive Telegram alerts.
 TELEGRAM_BOT_TOKEN: str = os.getenv("KABU_TELEGRAM_BOT_TOKEN", "")
 
 # ── Market Regime Detection / MRD (v2.5) ────────────────────────────────────────

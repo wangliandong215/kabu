@@ -19,7 +19,7 @@ since HMM state indices are arbitrary per training run).
 Differences from v27_hmm/ (deliberate, not oversights):
   - v27_hmm/ is a single-run train/test research sandbox with no persistence;
     this module trains once per stock and persists the fitted model (pickle)
-    to engine/hmm_models/, since production needs to *decode* new bars
+    to C:\\KabuData\\regime\\hmm_models/, since production needs to *decode* new bars
     against a fixed, already-trained model, not retrain from scratch daily.
   - v27_hmm/ operates on the capitalized Open/High/Low/Close/Volume schema;
     kabu's own data pipeline (data/fetcher.py, backtest.py) uses lowercase
@@ -75,7 +75,9 @@ HMM_VERSION = "hmm-v1"  # bump when the feature set / state count / label
                          # scheme changes, so persisted models and shadow log
                          # rows can be told apart from a future retraining.
 
-HMM_MODEL_DIR = Path(__file__).parent / "hmm_models"
+# Lives under C:\KabuData with all other runtime data (not in the repo), so a
+# machine move / backup only needs that one folder.
+HMM_MODEL_DIR = Path(r"C:\KabuData\regime\hmm_models")
 
 _LABEL_TO_REGIME = {
     "Bear": Regime.HMM_BEAR,
@@ -192,7 +194,7 @@ def train_stock_hmm(code: str, start: str = "2015-01-01", end: str = None) -> di
     """
     Train a 4-state GaussianHMM on the full available history for `code`
     (via backtest.fetch_kline()'s cache — see module docstring) and persist
-    it to engine/hmm_models/. Trains on ALL available history (no train/test
+    it to C:\\KabuData\\regime\\hmm_models/. Trains on ALL available history (no train/test
     split) — unlike v27_hmm/'s research pipeline, production wants the model
     fit on as much data as possible before decoding "today".
 

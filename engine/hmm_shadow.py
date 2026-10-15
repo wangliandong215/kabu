@@ -32,7 +32,7 @@ import backtest
 from engine.hmm_regime import MLRegimeClassifier, load_stock_hmm, HMM_VERSION, prepare_ohlcv
 from engine.regime_store import update_regime
 
-SHADOW_LOG_PATH = Path(__file__).parent / "regime_shadow_log.csv"
+SHADOW_LOG_PATH = Path(r"C:\KabuData\regime\regime_shadow_log.csv")
 SHADOW_LOG_COLUMNS = ["date", "code", "regime", "confidence", "changed_today", "duration_days"]
 
 
@@ -113,6 +113,7 @@ def run_shadow_pass(codes: list, as_of: str = None) -> pd.DataFrame:
             to_write = out_df[~out_df.apply(lambda r: (r["date"], r["code"]) in already, axis=1)]
 
         if not to_write.empty:
+            SHADOW_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
             header_needed = not SHADOW_LOG_PATH.exists()
             to_write.to_csv(SHADOW_LOG_PATH, mode="a", header=header_needed, index=False)
     return out_df
