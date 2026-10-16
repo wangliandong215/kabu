@@ -3,6 +3,7 @@
 
 moomoo-api>=10.4.6408   # moomoo OpenAPI Python SDK
 pandas>=1.5             # data manipulation
+pytz                    # market-hours timezone math (engine/market_hours.py)
 numpy>=1.23             # numerical computation
 backtrader>=1.9.76      # strategy backtesting framework
 matplotlib>=3.6         # chart plotting (used by backtrader)

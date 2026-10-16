@@ -45,8 +45,9 @@ import pandas as pd
 
 from engine.market_regime import MRD_VERSION, Regime, classify, to_regime_ctx
 from engine import regime_store
+import config
 
-_DEFAULT_DB_PATH = Path(r"C:\KabuData\trade_history\trade_history.db")
+_DEFAULT_DB_PATH = Path(config.DATA_ROOT, "trade_history", "trade_history.db")
 
 # ── V2.8 exit-reason enum ─────────────────────────────────────────────────────
 # Maps the free-text reason strings risk/guard.py and backtest_portfolio.py

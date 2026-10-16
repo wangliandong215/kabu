@@ -46,7 +46,7 @@ REGIME_NORMAL   = "NORMAL"
 REGIME_CAUTION  = "CAUTION"
 REGIME_RISK_OFF = "RISK_OFF"
 
-_PM_LOG_PATH = Path(r"C:\KabuData\portfolio\position_manager_log.jsonl")
+_PM_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "position_manager_log.jsonl")
 
 
 def classify_market_regime(weather_code: Optional[int], qqq_above_ma: Optional[bool],

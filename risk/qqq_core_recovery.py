@@ -54,9 +54,9 @@ from typing import Dict, List, Optional
 import config
 from risk import portfolio_risk_manager
 
-_STATE_PATH        = Path(r"C:\KabuData\portfolio\qqq_recovery_state.json")
-_RECOVERY_LOG_PATH = Path(r"C:\KabuData\portfolio\qqq_recovery_log.jsonl")
-_LEVEL3_LOG_PATH   = Path(r"C:\KabuData\portfolio\qqq_recovery_level3_plan_log.jsonl")
+_STATE_PATH        = Path(config.DATA_ROOT, "portfolio", "qqq_recovery_state.json")
+_RECOVERY_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "qqq_recovery_log.jsonl")
+_LEVEL3_LOG_PATH   = Path(config.DATA_ROOT, "portfolio", "qqq_recovery_level3_plan_log.jsonl")
 
 
 @dataclass

@@ -28,6 +28,7 @@ import pandas as pd
 
 import common
 from data import fetcher as _fetcher
+import config
 
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ from data import fetcher as _fetcher
 # numbers for any date range already covered; only genuinely new dates (the
 # tail beyond what's cached, or an earlier start not yet covered) hit OpenD.
 
-_CACHE_DIR = Path(r"C:\KabuData\backtest_cache")
+_CACHE_DIR = Path(config.DATA_ROOT, "backtest_cache")
 
 
 def _cache_path(code: str) -> Path:

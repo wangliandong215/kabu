@@ -22,8 +22,9 @@ import json
 import os
 import threading
 from pathlib import Path
+import config
 
-_STORE_PATH = Path(r"C:\KabuData\regime\regime_state.json")
+_STORE_PATH = Path(config.DATA_ROOT, "regime", "regime_state.json")
 _write_lock = threading.Lock()
 
 

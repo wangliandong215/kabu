@@ -48,10 +48,11 @@ from typing import Optional, Tuple
 import pandas as pd
 
 from research.early_failure_trajectory import build_trajectory_table
+import config
 
-_DB_PATH = Path(r"C:\KabuData\trade_history\trade_history.db")
+_DB_PATH = Path(config.DATA_ROOT, "trade_history", "trade_history.db")
 # Written by risk/portfolio_risk_manager.py (_RISK_LOG_PATH) — read only.
-_RISK_STATE_LOG_PATH = Path(r"C:\KabuData\portfolio\risk_state_log.jsonl")
+_RISK_STATE_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "risk_state_log.jsonl")
 
 _PHANTOM_EQUITY_BEFORE = 50000.0
 # engine/broker.py PaperBroker (JP virtual fills) landed in b9148d7.

@@ -56,8 +56,9 @@ from exit_engine import (atr_signal, break_even_signal, ema_signal,
                           trailing_stop_signal, trend_signal, volume_signal,
                           vwap_signal)
 from exit_engine.models import ExitEngineContext, ExitEngineResult, SignalReading
+import config
 
-EXIT_ENGINE_LOG_PATH = Path(r"C:\KabuData\portfolio\exit_engine_v32_log.jsonl")
+EXIT_ENGINE_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "exit_engine_v32_log.jsonl")
 
 _SIGNAL_MODULES = (vwap_signal, ema_signal, trend_signal, volume_signal,
                     time_signal, atr_signal, trailing_stop_signal, break_even_signal)

@@ -30,8 +30,9 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import config
 
-_STORE_PATH = Path(r"C:\KabuData\portfolio\position_manager_state.json")
+_STORE_PATH = Path(config.DATA_ROOT, "portfolio", "position_manager_state.json")
 _write_lock = threading.Lock()
 
 

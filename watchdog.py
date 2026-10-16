@@ -1,7 +1,8 @@
 """
 watchdog.py — external liveness check for the main.py monitoring loop.
 
-Run periodically (e.g. every 5-10 minutes via a Windows scheduled task)
+Run periodically (e.g. every 5-10 minutes via a Windows scheduled task,
+or the launchd agent in scripts/mac/ on macOS)
 alongside main.py. Detects two failure modes main.py cannot self-report,
 because in both cases the process that would normally call alert.error()
 is either frozen or gone:
@@ -61,6 +62,12 @@ _MAIN_ARGS = ["--auto", "--confirmed", "--interval", "300"]
 _CONSOLE_LOG = _ROOT / "kabu_console.log"
 _CONSOLE_ERR = _ROOT / "kabu_console.err.log"
 
+# Detach launched children from the watchdog process so they outlive it.
+if sys.platform == "win32":
+    _DETACH_KW = {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}
+else:
+    _DETACH_KW = {"start_new_session": True}
+
 # Normal cycle observed in production is ~420-425s (scan time + 300s sleep);
 # 15 minutes gives a wide margin before crying wolf on a slow-but-fine pass.
 _STALE_THRESHOLD = timedelta(minutes=15)
@@ -90,16 +97,21 @@ def _restart_opend() -> None:
     main() — this is called on every ~5min poll for as long as a hang
     persists, so a long incident means one message per restart attempt
     (by design, per user request: they want to see each restart happen)."""
-    subprocess.run(
-        ["taskkill", "/IM", "moomoo_OpenD.exe", "/F"],
-        capture_output=True,
-    )
+    if sys.platform == "win32":
+        kill_cmd = ["taskkill", "/IM", "moomoo_OpenD.exe", "/F"]
+    else:
+        kill_cmd = ["pkill", "-9", "-x", "moomoo_OpenD"]
+    subprocess.run(kill_cmd, capture_output=True)
     time.sleep(2)
-    subprocess.Popen(
-        [str(_OPEND_EXE)],
-        cwd=str(_OPEND_EXE.parent),
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-    )
+    if _OPEND_EXE.suffix == ".app":
+        # macOS app bundle — LaunchServices starts it in the GUI session.
+        subprocess.run(["open", "-a", str(_OPEND_EXE)], capture_output=True)
+    else:
+        subprocess.Popen(
+            [str(_OPEND_EXE)],
+            cwd=str(_OPEND_EXE.parent),
+            **_DETACH_KW,
+        )
     alert.push_raw(f"OpenD 网关已重启（{datetime.now().strftime('%H:%M:%S')}）")
 
 
@@ -134,7 +146,7 @@ def _restart_main() -> None:
             cwd=str(_ROOT),
             stdout=out,
             stderr=err,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            **_DETACH_KW,
         )
 
 

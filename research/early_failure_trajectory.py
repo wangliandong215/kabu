@@ -45,8 +45,9 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import config
 
-_DB_PATH = Path(r"C:\KabuData\trade_history\trade_history.db")
+_DB_PATH = Path(config.DATA_ROOT, "trade_history", "trade_history.db")
 _WEAK_CLOSE_THRESHOLD = 0.005   # 0.5% — "barely positive/negative" bar for consecutive_weak_close_days
 
 

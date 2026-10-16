@@ -47,8 +47,9 @@ from typing import Optional
 import pandas as pd
 
 from research.early_failure_trajectory import build_trajectory_table
+import config
 
-_DB_PATH = Path(r"C:\KabuData\research\early_failure_monitor.db")
+_DB_PATH = Path(config.DATA_ROOT, "research", "early_failure_monitor.db")
 _write_lock = threading.Lock()
 
 _SCHEMA = """

@@ -46,3 +46,6 @@ engine/regime_shadow_log.csv
 .vscode/
 .idea/
 Thumbs.db
+
+# Local Python virtualenv (macOS setup: scripts/mac/README.md)
+.venv/

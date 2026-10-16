@@ -57,8 +57,9 @@ from regime.models import MarketContext, MarketRegime
 from regime.provider import RegimeProvider
 from regime.rule_provider import RuleRegimeProvider
 from regime.llm_provider import LocalLLMRegimeProvider
+import config
 
-REGIME_LOG_PATH = Path(r"C:\KabuData\portfolio\regime_log.jsonl")
+REGIME_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "regime_log.jsonl")
 
 __all__ = [
     "MarketContext", "MarketRegime", "RegimeProvider",

@@ -16,8 +16,9 @@ import json
 from pathlib import Path
 
 from ai_decision.schema import AIDecision, AIDecisionContext
+import config
 
-_LOG_PATH = Path(r"C:\KabuData\ai_decision\ai_decision_log.jsonl")
+_LOG_PATH = Path(config.DATA_ROOT, "ai_decision", "ai_decision_log.jsonl")
 
 
 def log_decision(ctx: AIDecisionContext, decision: AIDecision) -> None:

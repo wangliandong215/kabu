@@ -71,7 +71,7 @@ from position_manager.models import (ACTION_HOLD, ACTION_REDUCE, ModuleSignal,
 # exact filename (see its _PM_LOG_PATH). This is a completely different log
 # schema for a completely different feature; sharing a path would interleave
 # two incompatible JSON shapes into one file.
-POSITION_MANAGER_LOG_PATH = Path(r"C:\KabuData\portfolio\position_manager_v31_log.jsonl")
+POSITION_MANAGER_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "position_manager_v31_log.jsonl")
 
 MODE_OFF = "OFF"
 MODE_OBSERVATION = "OBSERVATION"

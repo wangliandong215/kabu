@@ -22,8 +22,9 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import config
 
-_STORE_PATH = Path(r"C:\KabuData\portfolio\exit_engine_state.json")
+_STORE_PATH = Path(config.DATA_ROOT, "portfolio", "exit_engine_state.json")
 _write_lock = threading.Lock()
 
 

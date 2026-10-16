@@ -41,12 +41,12 @@ LOCK_ACQUIRED      = "ACQUIRED"
 LOCK_ACTIVE         = "LOCKED_ACTIVE"
 LOCK_STALE          = "LOCKED_STALE"
 
-_RISK_LOG_PATH  = Path(r"C:\KabuData\portfolio\risk_state_log.jsonl")
-_DIFF_LOG_PATH  = Path(r"C:\KabuData\portfolio\reconciliation_diffs.jsonl")
-_LAST_DIFF_PATH = Path(r"C:\KabuData\portfolio\reconciliation_last_diff.json")
-_LOCK_PATH      = Path(r"C:\KabuData\portfolio\rebalance_lock.json")
-_QQQ_RISK_LOG_PATH = Path(r"C:\KabuData\portfolio\qqq_core_risk_log.jsonl")
-_QQQ_TRIM_PREVIEW_PATH = Path(r"C:\KabuData\portfolio\qqq_trim_last_preview.json")
+_RISK_LOG_PATH  = Path(config.DATA_ROOT, "portfolio", "risk_state_log.jsonl")
+_DIFF_LOG_PATH  = Path(config.DATA_ROOT, "portfolio", "reconciliation_diffs.jsonl")
+_LAST_DIFF_PATH = Path(config.DATA_ROOT, "portfolio", "reconciliation_last_diff.json")
+_LOCK_PATH      = Path(config.DATA_ROOT, "portfolio", "rebalance_lock.json")
+_QQQ_RISK_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "qqq_core_risk_log.jsonl")
+_QQQ_TRIM_PREVIEW_PATH = Path(config.DATA_ROOT, "portfolio", "qqq_trim_last_preview.json")
 
 
 @dataclass

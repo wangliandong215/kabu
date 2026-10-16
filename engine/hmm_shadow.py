@@ -31,8 +31,9 @@ import pandas as pd
 import backtest
 from engine.hmm_regime import MLRegimeClassifier, load_stock_hmm, HMM_VERSION, prepare_ohlcv
 from engine.regime_store import update_regime
+import config
 
-SHADOW_LOG_PATH = Path(r"C:\KabuData\regime\regime_shadow_log.csv")
+SHADOW_LOG_PATH = Path(config.DATA_ROOT, "regime", "regime_shadow_log.csv")
 SHADOW_LOG_COLUMNS = ["date", "code", "regime", "confidence", "changed_today", "duration_days"]
 
 

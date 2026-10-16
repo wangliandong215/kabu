@@ -34,6 +34,8 @@ Safety:
 import argparse
 import ctypes
 import os
+import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -57,11 +59,20 @@ def _is_pid_running(pid: int) -> bool:
     image name closes that hole (still not airtight against another
     python.exe reusing the PID, but narrows it enormously)."""
     if sys.platform != "win32":
+        # Same PID-reuse guard as the Windows branch below: the PID must
+        # exist AND be a python process.
         try:
             os.kill(pid, 0)
-            return True
-        except OSError:
+        except ProcessLookupError:
             return False
+        except PermissionError:
+            pass   # exists, owned by another user
+        try:
+            comm = subprocess.run(["ps", "-p", str(pid), "-o", "comm="],
+                                  capture_output=True, text=True).stdout.strip()
+        except OSError:
+            return True   # can't inspect — err on the side of "running"
+        return Path(comm).name.lower().startswith("python")
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not handle:
@@ -101,8 +112,19 @@ def _register_shutdown_notifier() -> None:
     logging off, or closing this console — covers the process being killed
     by the OS (e.g. a scheduled `shutdown` task) rather than stopped
     gracefully with Ctrl+C, which engine/runner.py's loop already reports
-    via alert.info("kabu 监控已手动停止")."""
+    via alert.info("kabu 监控已手动停止").
+
+    On macOS/Linux the equivalent is SIGTERM (stop_kabu.sh, launchd,
+    system shutdown) / SIGHUP (owning terminal closed)."""
     if sys.platform != "win32":
+        SIGNAL_NAMES = {signal.SIGTERM: "进程被终止(SIGTERM)", signal.SIGHUP: "终端被关闭(SIGHUP)"}
+
+        def _posix_handler(signum, _frame):
+            alert.warn(f"kabu 监控即将停止 — 原因：{SIGNAL_NAMES.get(signum, signum)}")
+            sys.exit(0)
+
+        for sig in SIGNAL_NAMES:
+            signal.signal(sig, _posix_handler)
         return
     global _shutdown_handler_ref
 

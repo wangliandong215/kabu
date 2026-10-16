@@ -5,12 +5,23 @@ Override any value via environment variable or edit this file directly.
 """
 import json
 import os
+import sys
+
+# ── Runtime data root ─────────────────────────────────────────────────────────
+# All runtime state/logs/DBs (positions, trade_history.db, order_audit.db,
+# HMM models, ...) live under this folder, outside the repo. C:\KabuData on
+# the original Windows server, ~/KabuData on macOS/Linux — copy the folder
+# across on a machine move. KABU_DATA_DIR overrides either default.
+DATA_ROOT: str = os.getenv("KABU_DATA_DIR") or (
+    r"C:\KabuData" if sys.platform == "win32"
+    else os.path.join(os.path.expanduser("~"), "KabuData")
+)
 
 # ── Secrets file ──────────────────────────────────────────────────────────────
 # Telegram token/chat id etc. can live in this JSON file ({"ENV_NAME": "value"})
-# so they travel with the C:\KabuData folder on a machine move. A real
+# so they travel with the DATA_ROOT folder on a machine move. A real
 # environment variable always wins; empty values in the file are ignored.
-SECRETS_FILE: str = r"C:\KabuData\secrets.json"
+SECRETS_FILE: str = os.path.join(DATA_ROOT, "secrets.json")
 
 
 def _load_secrets_file(path: str = SECRETS_FILE) -> None:
@@ -37,10 +48,11 @@ ACC_ID:     int  = int(os.getenv("FUTU_ACC_ID",    "0"))
 
 # OpenD gateway is set to auto-login, so watchdog.py can kill and relaunch
 # the exe with no credentials to re-enter when it detects a hang (see
-# watchdog.py's _restart_opend()).
-OPEND_EXE_PATH: str = os.getenv(
-    "OPEND_EXE_PATH",
-    r"C:\Users\Administrator\AppData\Roaming\moomoo_OpenD\moomoo_OpenD.exe",
+# watchdog.py's _restart_opend()). On macOS this is the .app bundle.
+OPEND_EXE_PATH: str = os.getenv("OPEND_EXE_PATH") or (
+    r"C:\Users\Administrator\AppData\Roaming\moomoo_OpenD\moomoo_OpenD.exe"
+    if sys.platform == "win32"
+    else "/Applications/moomoo_OpenD.app"
 )
 
 # ── Watchlist ─────────────────────────────────────────────────────────────────
@@ -343,7 +355,7 @@ INITIAL_CAPITAL: float = 1_000_522.45  # total account capital (USD) — matches
 # 虚拟本金跟美股实盘用同一个数字，这样两边的position_pct/仓位占比可以直接
 # 拿来一起做统计/训练，不用换算单位。
 JP_PAPER_INITIAL_CAPITAL: float = INITIAL_CAPITAL
-JP_PAPER_POSITIONS_PATH:  str   = r"C:\KabuData\portfolio\positions_jp_paper.json"
+JP_PAPER_POSITIONS_PATH:  str   = os.path.join(DATA_ROOT, "portfolio", "positions_jp_paper.json")
 
 # 2026-07-21起：moomoo账号的日股行情权限拉不到数据（get_market_snapshot/
 # fetch_kline对所有JP代码返回"无权限获取行情"），OpenD重启后也没恢复，
@@ -1237,8 +1249,8 @@ AI_DECISION_MODE: str = "OFF"
 # exit_engine/*、ai_decision/* 读取，只影响 research/trade_intelligence_*.py
 # 计算/记录什么，不影响任何真实交易决策。见 research/trade_intelligence_runner.py
 # 模块 docstring。
-TRADE_INTELLIGENCE_DB_PATH: str = r"C:\KabuData\research\trade_intelligence.db"
-TRADE_INTELLIGENCE_REPORT_DIR: str = r"C:\KabuData\research\reports"
+TRADE_INTELLIGENCE_DB_PATH: str = os.path.join(DATA_ROOT, "research", "trade_intelligence.db")
+TRADE_INTELLIGENCE_REPORT_DIR: str = os.path.join(DATA_ROOT, "research", "reports")
 
 TRADE_INTELLIGENCE_LLM_MODE: str = "OFF"
     # OFF（默认，NullNarrativeProvider）/ SHADOW（MockNarrativeProvider，
@@ -1257,14 +1269,14 @@ TRADE_INTELLIGENCE_HOLDING_DAYS_BUCKETS: tuple = (2, 5, 10)
 TRADE_INTELLIGENCE_POSITION_PCT_BUCKETS: tuple = (0.05, 0.10, 0.15)
 
 # ── Data cache ────────────────────────────────────────────────────────────────
-CACHE_DIR:          str = r"C:\KabuData\live_cache"
+CACHE_DIR:          str = os.path.join(DATA_ROOT, "live_cache")
 CACHE_TTL_DAILY:    int = 3600 * 6   # 6 h for 1d / 1w / 1M bars
 CACHE_TTL_INTRADAY: int = 300        # 5 min for 1m–60m bars
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 # All notify/alert.py messages (console + Telegram/DingTalk) are also written
 # here so operational history survives a closed terminal / server reboot.
-LOG_DIR:          str = r"C:\KabuData\logs"
+LOG_DIR:          str = os.path.join(DATA_ROOT, "logs")
 LOG_MAX_BYTES:    int = 10 * 1024 * 1024  # rotate after 10 MB
 LOG_BACKUP_COUNT: int = 5                 # keep 5 rotated files (~50 MB total)
 
@@ -1282,13 +1294,13 @@ DINGTALK_WEBHOOK: str = os.getenv("KABU_DINGTALK_WEBHOOK", "")
 # When this file exists, notify/alert.py skips DingTalk/Telegram pushes (phone
 # notifications) while still printing/logging to console and kabu.log. Checked
 # live on every push, so touch/delete it to pause/resume without restarting
-# the bot. Create/remove with: New-Item / Remove-Item on this path.
-NOTIFY_MUTE_FILE: str = r"C:\KabuData\notify_paused.flag"
+# the bot. Create/remove with: New-Item / Remove-Item (Windows) or touch / rm (macOS).
+NOTIFY_MUTE_FILE: str = os.path.join(DATA_ROOT, "notify_paused.flag")
 
 # Last-pushed state per key for notify/alert.py:warn_on_state_change() — a
 # persistent condition (e.g. portfolio risk tier staying at PAUSE_NEW for
 # weeks) is pushed once when it starts, not once per day / per restart.
-NOTIFY_STATE_FILE: str = r"C:\KabuData\notify_state.json"
+NOTIFY_STATE_FILE: str = os.path.join(DATA_ROOT, "notify_state.json")
 
 # Set KABU_TELEGRAM_BOT_TOKEN / KABU_TELEGRAM_CHAT_ID (env vars, or in
 # SECRETS_FILE above) to receive Telegram alerts.
@@ -1336,7 +1348,7 @@ SYSTEM_VERSION: str = "2.8"
 # only ever affect what gets RECORDED, never a trading decision. See
 # research/scan_mean_reversion_candidates.py (module docstring) for the full
 # rationale and project spec reference.
-MR_DB_PATH: str = r"C:\KabuData\research\mean_reversion_observations.db"
+MR_DB_PATH: str = os.path.join(DATA_ROOT, "research", "mean_reversion_observations.db")
 
 # Recording trigger — ANY one of these firing is enough to log a candidate
 # event for a stock on a given day. Deliberately loose ("wide net") so the
@@ -1373,7 +1385,7 @@ MR_CRASH_SECTOR_SELLOFF_3D: float = -0.05   # sector ETF 3D return <= this -> se
 # 观察层，不参与交易决策——见 research/collect_market_features.py 模块docstring
 # 的隔离纪律（不 import portfolio/risk/strategies/engine.runner）。
 RESEARCH_MARKET_FEATURES_ENABLED: bool = True
-RESEARCH_MARKET_FEATURES_DB_PATH: str = r"C:\KabuData\research\market_features.db"
+RESEARCH_MARKET_FEATURES_DB_PATH: str = os.path.join(DATA_ROOT, "research", "market_features.db")
 RESEARCH_MACRO_REGION: str = "US"
 RESEARCH_MACRO_INDICATOR_IDS: list = []   # 按需填入关心的宏观指标 ID（见
     # get_macro_indicator_list 的返回结果，为空则跳过历史值抓取，只记录指标列表）

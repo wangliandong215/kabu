@@ -47,7 +47,7 @@ from risk.llm_advisor import LLMRiskAdvisor
 from risk.portfolio_state import PortfolioState
 from risk.risk_decision import OrderIntent, RiskDecision, RiskStatus, allow
 
-_LOG_PATH = Path(r"C:\KabuData\portfolio\risk_engine_log.jsonl")
+_LOG_PATH = Path(config.DATA_ROOT, "portfolio", "risk_engine_log.jsonl")
 
 # Each entry: (name, check_fn(order, state) -> (sub_result, RiskDecision))
 _SUB_CHECKS = (

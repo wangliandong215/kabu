@@ -117,7 +117,7 @@ class TestLogAttempt(unittest.TestCase):
         self.assertTrue(record["enabled"])
 
     def test_never_raises_when_log_dir_unwritable(self):
-        ppm._PM_LOG_PATH = Path("Z:\\definitely\\not\\a\\real\\drive\\position_manager_log.jsonl")
+        ppm._PM_LOG_PATH = Path(__file__).resolve() / "not_a_dir" / "position_manager_log.jsonl"
         budget = ppm.compute_exposure_budget(ppm.REGIME_NORMAL, long_mv=0.0, total_assets=1_000_000.0)
         try:
             ppm.log_attempt(section="2C_NEW_ENTRY", code="US.TEST", regime=ppm.REGIME_NORMAL,

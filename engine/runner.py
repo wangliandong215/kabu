@@ -1649,7 +1649,7 @@ def _run_emergency_rebalance(portfolio: Portfolio, results: dict, trd_env, env_l
     if lock_state == portfolio_risk_manager.LOCK_STALE:
         alert.error("再平衡：发现一个超时未释放的执行锁（可能是上次执行崩溃/卡死），"
                     r"为避免掩盖异常状态不会自动清除——需要人工确认账户真实状态后"
-                    r"手动删除 C:\KabuData\portfolio\rebalance_lock.json 才会继续")
+                    f"手动删除 {portfolio_risk_manager._LOCK_PATH} 才会继续")
         return []
     if lock_state == portfolio_risk_manager.LOCK_ACTIVE:
         alert.warn("再平衡：已有一次执行正在进行中（或锁文件无法读取），本轮跳过，避免重复下单")
@@ -1822,7 +1822,7 @@ def _run_qqq_core_trim(portfolio: Portfolio, trd_env, env_label: str, confirmed:
     if lock_state == portfolio_risk_manager.LOCK_STALE:
         alert.error("QQQ CORE trim：发现一个超时未释放的执行锁（可能是上次执行崩溃/卡死），"
                     r"为避免掩盖异常状态不会自动清除——需要人工确认账户真实状态后"
-                    r"手动删除 C:\KabuData\portfolio\rebalance_lock.json 才会继续")
+                    f"手动删除 {portfolio_risk_manager._LOCK_PATH} 才会继续")
         return []
     if lock_state == portfolio_risk_manager.LOCK_ACTIVE:
         alert.warn("QQQ CORE trim：已有一次再平衡执行正在进行中（或锁文件无法读取），本轮跳过")

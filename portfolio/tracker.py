@@ -23,7 +23,7 @@ import config
 import notify.alert as alert
 
 
-_DEFAULT_PATH = Path(r"C:\KabuData\portfolio\positions.json")
+_DEFAULT_PATH = Path(config.DATA_ROOT, "portfolio", "positions.json")
 
 # Module-level write lock: prevents concurrent saves from corrupting the JSON
 # when two passes overlap (e.g. slow network delays a previous run).

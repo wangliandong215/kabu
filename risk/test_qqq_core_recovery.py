@@ -280,14 +280,14 @@ class StateIOTestCase(unittest.TestCase):
         self.assertEqual(qcr.load_state(), state)
 
     def test_save_never_raises_on_unwritable_path(self):
-        qcr._STATE_PATH = Path("Z:\\definitely\\does\\not\\exist\\state.json")
+        qcr._STATE_PATH = Path(__file__).resolve() / "not_a_dir" / "state.json"
         try:
             qcr.save_state(qcr.RecoveryState())
         except Exception as exc:
             self.fail(f"save_state() must never raise, got {exc!r}")
 
     def test_load_never_raises_on_unwritable_path(self):
-        qcr._STATE_PATH = Path("Z:\\definitely\\does\\not\\exist\\state.json")
+        qcr._STATE_PATH = Path(__file__).resolve() / "not_a_dir" / "state.json"
         try:
             qcr.load_state()
         except Exception as exc:

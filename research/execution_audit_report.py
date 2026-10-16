@@ -31,11 +31,12 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import config
 
-_AUDIT_DB = Path(r"C:\KabuData\execution\order_audit.db")
-_TRADE_DB = Path(r"C:\KabuData\trade_history\trade_history.db")
-_RISK_STATE_LOG = Path(r"C:\KabuData\portfolio\risk_state_log.jsonl")
-_DIFF_LOG = Path(r"C:\KabuData\portfolio\reconciliation_diffs.jsonl")
+_AUDIT_DB = Path(config.DATA_ROOT, "execution", "order_audit.db")
+_TRADE_DB = Path(config.DATA_ROOT, "trade_history", "trade_history.db")
+_RISK_STATE_LOG = Path(config.DATA_ROOT, "portfolio", "risk_state_log.jsonl")
+_DIFF_LOG = Path(config.DATA_ROOT, "portfolio", "reconciliation_diffs.jsonl")
 
 _LOCAL_WINDOW = timedelta(minutes=5)
 _RECONCILE_WINDOW = timedelta(days=1)

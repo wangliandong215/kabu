@@ -44,8 +44,9 @@ import statistics
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+import config
 
-LOG_PATH = Path(r"C:\KabuData\portfolio\position_manager_v31_log.jsonl")
+LOG_PATH = Path(config.DATA_ROOT, "portfolio", "position_manager_v31_log.jsonl")
 
 # A forward return at this horizon or better is "the trend kept going" —
 # same order of magnitude as risk/sizing.py's per-trade risk budget, not

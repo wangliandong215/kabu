@@ -56,6 +56,7 @@ from sklearn.preprocessing import StandardScaler
 
 import backtest
 from engine.market_regime import Regime, RegimeClassifier, REGIME_NAMES
+import config
 
 HMM_N_STATES = 4
 HMM_RANDOM_STATE = 42
@@ -77,7 +78,7 @@ HMM_VERSION = "hmm-v1"  # bump when the feature set / state count / label
 
 # Lives under C:\KabuData with all other runtime data (not in the repo), so a
 # machine move / backup only needs that one folder.
-HMM_MODEL_DIR = Path(r"C:\KabuData\regime\hmm_models")
+HMM_MODEL_DIR = Path(config.DATA_ROOT, "regime", "hmm_models")
 
 _LABEL_TO_REGIME = {
     "Bear": Regime.HMM_BEAR,

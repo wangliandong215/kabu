@@ -46,8 +46,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import config
 
-_DB_PATH = Path(r"C:\KabuData\execution\order_audit.db")
+_DB_PATH = Path(config.DATA_ROOT, "execution", "order_audit.db")
 _lock = threading.Lock()
 _initialized: set = set()   # DB paths whose schema has been created this process
 
