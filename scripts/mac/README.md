@@ -27,6 +27,10 @@ scripts/mac/stop_kabu.sh               # stop main.py (OpenD keeps running)
 scripts/mac/watchdog_agent.sh install  # run watchdog.py every 5 min via launchd
 scripts/mac/watchdog_agent.sh status
 scripts/mac/watchdog_agent.sh uninstall
+scripts/mac/research_agents.sh install # daily research scans via launchd:
+                                       #   Research Scan 08:00, Market Features 08:15 (JST,
+                                       #   after the US close in both DST and standard time)
+scripts/mac/research_agents.sh status|run-now|uninstall
 ```
 
 Logs: `kabu_console.log` / `kabu_console.err.log` (main.py stdout/stderr),
